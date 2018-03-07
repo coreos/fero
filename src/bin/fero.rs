@@ -1,8 +1,7 @@
 #[macro_use]
 extern crate clap;
 extern crate diesel;
-#[macro_use]
-extern crate error_chain;
+extern crate failure;
 extern crate fero;
 extern crate futures;
 #[macro_use]
@@ -10,16 +9,21 @@ extern crate log;
 extern crate loggerv;
 
 use clap::{Arg, App};
-use fero::errors::*;
+use failure::Error;
 use futures::Future;
 use futures::sync::oneshot;
 use std::io::{self, Read};
 use std::str::FromStr;
 use std::thread;
 
-quick_main!(run);
+pub fn main() {
+    if let Err(e) = run() {
+        println!("{:?}", e);
+        ::std::process::exit(1);
+    }
+}
 
-fn run() -> Result<()> {
+fn run() -> Result<(), Error> {
     let args = App::new(crate_name!())
         .version(crate_version!())
         .about(crate_description!())
@@ -59,8 +63,7 @@ fn run() -> Result<()> {
     loggerv::init_with_verbosity(args.occurrences_of("VERBOSITY")).unwrap();
 
     let address = args.value_of("ADDRESS").expect("address flag");
-    let port = u16::from_str(args.value_of("PORT").expect("port flag"))
-        .chain_err(|| "Failed to parse port")?;
+    let port = u16::from_str(args.value_of("PORT").expect("port flag"))?;
 
     let mut server = fero::create_server(address, port, args.value_of("DATABASE").expect("database flag"))?;
     server.start();
@@ -71,7 +74,5 @@ fn run() -> Result<()> {
         tx.send(())
     });
     let _ = rx.wait();
-    server.shutdown().wait().chain_err(
-        || "Failed to shutdown server properly",
-    )
+    server.shutdown().wait().map_err(|e| e.into())
 }

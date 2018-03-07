@@ -6,7 +6,7 @@ authors = ["Alex Crawford <alex.crawford@coreos.com>"]
 [dependencies]
 clap = "2"
 diesel = { version = "1", features = ["sqlite"] }
-error-chain = "0.11"
+failure = "0.1"
 futures = "0.1"
 grpcio = "0.2"
 log = "0.4"

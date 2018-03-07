@@ -1,5 +1,5 @@
 use database::Configuration;
-use errors::*;
+use failure::Error;
 use futures::Future;
 use gpgme::{Context, Protocol};
 use grpcio::{self, RpcContext, RpcStatus, UnarySink};
@@ -85,7 +85,7 @@ impl FeroService {
         ident: &Identification,
         user_key_id: u64,
         weight: i32,
-    ) -> Result<()> {
+    ) -> Result<(), Error> {
         let (conn, _) = self.database.authenticate(ident, &[weight as u8])?;
 
         let user = conn.upsert_user_key(user_key_id as u64)?;
@@ -96,7 +96,7 @@ impl FeroService {
         &self,
         ident: &Identification,
         payload: &[u8],
-    ) -> Result<Vec<u8>>{
+    ) -> Result<Vec<u8>, Error>{
         let (_, data) = self.database.authenticate(ident, payload)?;
         let mut output = Vec::new();
 

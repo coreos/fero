@@ -1,7 +1,6 @@
 #[macro_use]
 extern crate clap;
-#[macro_use]
-extern crate error_chain;
+extern crate failure;
 extern crate fero;
 extern crate grpcio;
 #[macro_use]
@@ -10,7 +9,7 @@ extern crate loggerv;
 extern crate protobuf;
 
 use clap::{Arg, App, AppSettings, SubCommand};
-use fero::errors::*;
+use failure::Error;
 use fero::{Identification, FeroClient, SignRequest, ThresholdRequest, WeightRequest};
 use grpcio::{ChannelBuilder, EnvBuilder};
 use protobuf::repeated::RepeatedField;
@@ -19,9 +18,14 @@ use std::io::{Read, Write};
 use std::str::FromStr;
 use std::sync::Arc;
 
-quick_main!(run);
+pub fn main() {
+    if let Err(e) = run() {
+        println!("{:?}", e);
+        ::std::process::exit(1);
+    }
+}
 
-fn run() -> Result<()> {
+fn run() -> Result<(), Error> {
     let args = App::new(crate_name!())
         .version(crate_version!())
         .about(crate_description!())
@@ -173,8 +177,7 @@ fn run() -> Result<()> {
     match args.subcommand() {
         ("sign", Some(args)) => {
             let mut ident = Identification::new();
-            ident.set_secretKeyId(u64::from_str(args.value_of("SECRETKEYID").expect("secret key id"))
-                .chain_err(|| "Failed to parse weight")?);
+            ident.set_secretKeyId(u64::from_str(args.value_of("SECRETKEYID").expect("secret key id"))?);
             if let Some(signatures) = args.values_of("SIGNATURES") {
                 let mut signatures_contents = Vec::new();
                 for filename in signatures {
@@ -205,27 +208,20 @@ fn run() -> Result<()> {
             let mut req = ThresholdRequest::new();
             req.set_threshold(i32::from_str(
                 args.value_of("THRESHOLD").expect("threshold flag"),
-            ).chain_err(|| "Failed to parse threshold")?);
+            )?);
 
-            client.set_secret_key_threshold(&req).map(|_| ()).chain_err(
-                || "Failed to set secret key threshold",
-            )
+            client.set_secret_key_threshold(&req).map(|_| ()).map_err(|e| e.into())
         }
         ("weight", Some(args)) => {
             let mut ident = Identification::new();
-            ident.set_secretKeyId(u64::from_str(args.value_of("SECRETKEYID").expect("secret key id"))
-                .chain_err(|| "Failed to parse weight")?);
+            ident.set_secretKeyId(u64::from_str(args.value_of("SECRETKEYID").expect("secret key id"))?);
 
             let mut req = WeightRequest::new();
             req.set_identification(ident);
-            req.set_userKeyId(u64::from_str(args.value_of("USERKEYID").expect("user key id"))
-                .chain_err(|| "Failed to parse weight")?);
-            req.set_weight(i32::from_str(args.value_of("WEIGHT").expect("weight flag"))
-                .chain_err(|| "Failed to parse weight")?);
+            req.set_userKeyId(u64::from_str(args.value_of("USERKEYID").expect("user key id"))?);
+            req.set_weight(i32::from_str(args.value_of("WEIGHT").expect("weight flag"))?);
 
-            client.set_user_key_weight(&req).map(|_| ()).chain_err(
-                || "Failed to set user key weight",
-            )
+            client.set_user_key_weight(&req).map(|_| ()).map_err(|e| e.into())
         }
         _ => panic!("subcommand expected"),
     }
