@@ -1,20 +1,16 @@
 mod models;
 mod schema;
 
-use diesel;
-use diesel::Connection;
+use std::collections::HashSet;
+
+use diesel::{self, Connection};
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use failure::Error;
 use gpgme::{Context, Protocol};
+
 use self::models::*;
-use std::collections::HashSet;
 pub use types::fero::*;
-
-
-
-//type UserKeyId u64;
-//type SecretKeyId u64;
 
 #[derive(Clone)]
 pub struct Configuration {

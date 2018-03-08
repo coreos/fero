@@ -8,13 +8,14 @@ extern crate futures;
 extern crate log;
 extern crate loggerv;
 
+use std::io::{self, Read};
+use std::str::FromStr;
+use std::thread;
+
 use clap::{Arg, App};
 use failure::Error;
 use futures::Future;
 use futures::sync::oneshot;
-use std::io::{self, Read};
-use std::str::FromStr;
-use std::thread;
 
 pub fn main() {
     if let Err(e) = run() {

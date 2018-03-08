@@ -19,9 +19,11 @@ mod hsm;
 mod service;
 mod types;
 
+use std::sync::Arc;
+
 use failure::Error;
 use grpcio::{Environment, Server, ServerBuilder};
-use std::sync::Arc;
+
 pub use types::fero::*;
 pub use types::fero_grpc::*;
 
