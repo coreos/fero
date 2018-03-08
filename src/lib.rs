@@ -14,6 +14,7 @@ extern crate pretty_good;
 extern crate protobuf;
 extern crate yasna;
 
+mod bastion;
 mod database;
 mod hsm;
 mod service;
@@ -39,6 +40,22 @@ pub fn create_server(
         .register_service(create_fero(service::FeroService::new(
             database::Configuration::new(database),
             hsm::HsmSigner::new(hsm_connector, hsm_authkey, hsm_password)?,
+        )))
+        .bind(address, port)
+        .build()
+        .map_err(|e| e.into())
+}
+
+pub fn create_bastion(
+    address: &str,
+    port: u16,
+    server_address: &str,
+    server_port: u16,
+) -> Result<Server, Error> {
+    ServerBuilder::new(Arc::new(Environment::new(1)))
+        .register_service(create_fero(bastion::FeroBastion::new(
+            server_address,
+            server_port,
         )))
         .bind(address, port)
         .build()
