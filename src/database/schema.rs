@@ -5,6 +5,7 @@ table! {
         id -> Integer,
         key_id -> BigInt,
         threshold -> Integer,
+        hsm_id -> Integer,
     }
 }
 

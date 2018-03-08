@@ -1,8 +1,10 @@
 use database::Configuration;
 use failure::Error;
 use futures::Future;
+use hsm::*;
 use gpgme::{Context, Protocol};
 use grpcio::{self, RpcContext, RpcStatus, UnarySink};
+use pretty_good::{HashAlgorithm, Packet};
 pub use types::fero::*;
 pub use types::fero_grpc::*;
 
@@ -10,6 +12,7 @@ pub use types::fero_grpc::*;
 #[derive(Clone)]
 pub struct FeroService {
     database: Configuration,
+    signer: HsmSigner,
 }
 
 impl Fero for FeroService {
@@ -76,8 +79,8 @@ impl Fero for FeroService {
 }
 
 impl FeroService {
-    pub fn new(database: Configuration) -> FeroService {
-        FeroService { database }
+    pub fn new(database: Configuration, signer: HsmSigner) -> FeroService {
+        FeroService { database, signer }
     }
 
     fn set_user_key_weight(
@@ -97,16 +100,15 @@ impl FeroService {
         ident: &Identification,
         payload: &[u8],
     ) -> Result<Vec<u8>, Error>{
-        let (_, data) = self.database.authenticate(ident, payload)?;
-        let mut output = Vec::new();
+        let (database, data) = self.database.authenticate(ident, payload)?;
 
-        let mut gpg = Context::from_protocol(Protocol::OpenPgp)?;
-        // TODO: Non-lexical lifetimes...
-        let key = gpg.find_secret_key(format!("{:x}", ident.secretKeyId))?;
-        gpg.add_signer(&key)?;
-        // Needs a password
-        gpg.sign_detached(&data, &mut output)?;
+        let hsm_key = database.get_hsm_key_id()?;
+        let mut signature = self.signer.create_signature(data, hsm_key, HashAlgorithm::Sha256)?;
+        signature.set_signer(ident.secretKeyId as u64);
 
-        Ok(output)
+        let pgp_packet = Packet::Signature(signature);
+        let packet_bytes = pgp_packet.to_bytes()?;
+
+        Ok(Vec::from(packet_bytes))
     }
 }

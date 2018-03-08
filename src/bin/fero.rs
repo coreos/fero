@@ -58,6 +58,28 @@ fn run() -> Result<(), Error> {
                 .multiple(true)
                 .help("The level of verbosity"),
         )
+        .arg(
+            Arg::with_name("HSM_CONNECTOR_URL")
+                .short("c")
+                .long("connector-url")
+                .takes_value(true)
+                .default_value("http://127.0.0.1:12345")
+                .help("The URL for the HSM connector"),
+        )
+        .arg(
+            Arg::with_name("HSM_AUTHKEY")
+                .short("k")
+                .long("authkey")
+                .takes_value(true)
+                .help("The YubiHSM2 AuthKey to use")
+        )
+        .arg(
+            Arg::with_name("HSM_PASSWORD")
+                .short("w")
+                .long("password")
+                .takes_value(true)
+                .help("The password for the HSM AuthKey")
+        )
         .get_matches();
 
     loggerv::init_with_verbosity(args.occurrences_of("VERBOSITY")).unwrap();
@@ -65,7 +87,21 @@ fn run() -> Result<(), Error> {
     let address = args.value_of("ADDRESS").expect("address flag");
     let port = u16::from_str(args.value_of("PORT").expect("port flag"))?;
 
-    let mut server = fero::create_server(address, port, args.value_of("DATABASE").expect("database flag"))?;
+    let database = args.value_of("DATABASE").expect("database flag");
+
+    let hsm_connector_url = args.value_of("HSM_CONNECTOR_URL").expect("connector URL flag");
+    let hsm_authkey = u16::from_str(args.value_of("HSM_AUTHKEY").expect("authkey flag"))?;
+    let hsm_password = args.value_of("HSM_PASSWORD").expect("HSM password flag");
+
+    let mut server = fero::create_server(
+        address,
+        port,
+        database,
+        hsm_connector_url,
+        hsm_authkey,
+        hsm_password,
+    )?;
+
     server.start();
     let (tx, rx) = oneshot::channel();
     thread::spawn(move || {
@@ -74,5 +110,7 @@ fn run() -> Result<(), Error> {
         tx.send(())
     });
     let _ = rx.wait();
-    server.shutdown().wait().map_err(|e| e.into())
+    server.shutdown().wait()?;
+
+    Ok(())
 }

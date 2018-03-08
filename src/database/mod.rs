@@ -81,7 +81,7 @@ impl Configuration {
         }
 
         if weight >= secret.threshold {
-            Ok((AuthenticatedConnection { connection: conn }, data))
+            Ok((AuthenticatedConnection { connection: conn, secret_key: ident.secretKeyId }, data))
         } else {
             bail!("Signatures do not meet threshold");
         }
@@ -89,10 +89,20 @@ impl Configuration {
 }
 
 pub struct AuthenticatedConnection {
+    secret_key: u64,
     connection: SqliteConnection,
 }
 
 impl AuthenticatedConnection {
+    pub fn get_hsm_key_id(&self) -> Result<u16, Error> {
+        schema::secrets::dsl::secrets
+            .filter(schema::secrets::columns::key_id.eq(self.secret_key as i64))
+            .load::<SecretKey>(&self.connection)?
+            .pop()
+            .map(|key| key.hsm_id as u16)
+            .ok_or(format_err!("Secret key deleted while in use?"))
+    }
+
     pub fn upsert_user_key(&self, key_id: u64) -> Result<UserKey, Error> {
         if let Some(key) = schema::users::dsl::users
             .filter(schema::users::columns::key_id.eq(key_id as i64))
