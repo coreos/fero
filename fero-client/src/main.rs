@@ -1,9 +1,8 @@
 #[macro_use]
 extern crate clap;
 extern crate failure;
-extern crate fero;
+extern crate fero_proto;
 extern crate grpcio;
-#[macro_use]
 extern crate log;
 extern crate loggerv;
 extern crate protobuf;
@@ -18,7 +17,8 @@ use failure::Error;
 use grpcio::{ChannelBuilder, EnvBuilder};
 use protobuf::repeated::RepeatedField;
 
-use fero::{Identification, FeroClient, SignRequest, ThresholdRequest, WeightRequest};
+use fero_proto::fero::{Identification, SignRequest, ThresholdRequest, WeightRequest};
+use fero_proto::fero_grpc::FeroClient;
 
 pub fn main() {
     if let Err(e) = run() {
