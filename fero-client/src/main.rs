@@ -1,24 +1,98 @@
-#[macro_use]
-extern crate clap;
 extern crate failure;
 extern crate fero_proto;
 extern crate grpcio;
 extern crate log;
 extern crate loggerv;
 extern crate protobuf;
+#[macro_use]
+extern crate structopt;
 
 use std::fs::File;
 use std::io::{Read, Write};
-use std::str::FromStr;
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use clap::{Arg, App, AppSettings, SubCommand};
 use failure::Error;
 use grpcio::{ChannelBuilder, EnvBuilder};
 use protobuf::repeated::RepeatedField;
+use structopt::StructOpt;
 
 use fero_proto::fero::{Identification, SignRequest, ThresholdRequest, WeightRequest};
 use fero_proto::fero_grpc::FeroClient;
+
+#[derive(StructOpt)]
+#[structopt(name = "fero-client")]
+struct Opt {
+    #[structopt(short = "a", long = "address", default_value = "localhost")]
+    /// The server's address.
+    address: String,
+    #[structopt(short = "p", long = "port", default_value = "50051")]
+    /// The server's port.
+    port: u16,
+    #[structopt(short = "v", parse(from_occurrences))]
+    /// Verbosity.
+    verbosity: u64,
+    #[structopt(subcommand)]
+    command: FeroCommand,
+}
+
+#[derive(StructOpt)]
+struct SignCommand {
+    #[structopt(short = "k", long = "secret-key-id")]
+    /// The secret key id to sign with.
+    secret_key_id: u64,
+    #[structopt(short = "f", long = "file", parse(from_os_str))]
+    /// The file to sign.
+    file: PathBuf,
+    #[structopt(short = "s", long = "signature", parse(from_os_str))]
+    /// The user signatures to authorize signing.
+    signatures: Vec<PathBuf>,
+    #[structopt(short = "o", long = "output", parse(from_os_str))]
+    /// The file to place the signature in.
+    output: PathBuf,
+}
+
+#[derive(StructOpt)]
+struct ThresholdCommand {
+    #[structopt(short = "k", long = "secret-key-id")]
+    /// The secret key id to update.
+    secret_key_id: u64,
+    #[structopt(short = "t", long = "threshold")]
+    /// The new threshold to set.
+    threshold: i32,
+    #[structopt(short = "s", long = "signature", parse(from_os_str))]
+    /// The user signatures to authorize the operation.
+    signatures: Vec<PathBuf>,
+}
+
+#[derive(StructOpt)]
+struct WeightCommand {
+    #[structopt(short = "k", long = "secret-key-id")]
+    /// The secret key id to update.
+    secret_key_id: u64,
+    #[structopt(short = "u", long = "user-id")]
+    /// The user whose weight is to be updated.
+    user_id: u64,
+    #[structopt(short = "w", long = "weight")]
+    /// The new weight.
+    weight: i32,
+    #[structopt(short = "s", long = "signature", parse(from_os_str))]
+    /// The user signatures to authorize the operation.
+    signatures: Vec<PathBuf>,
+}
+
+#[derive(StructOpt)]
+enum FeroCommand {
+    #[structopt(name = "sign")]
+    /// Sign the given file.
+    Sign(SignCommand),
+    #[structopt(name = "threshold")]
+    /// Update the threshold for a given secret key.
+    Threshold(ThresholdCommand),
+    #[structopt(name = "weight")]
+    /// Update a given user's weight for a given secret key.
+    Weight(WeightCommand),
+}
 
 pub fn main() {
     if let Err(e) = run() {
@@ -28,203 +102,62 @@ pub fn main() {
 }
 
 fn run() -> Result<(), Error> {
-    let args = App::new(crate_name!())
-        .version(crate_version!())
-        .about(crate_description!())
-        .arg(
-            Arg::with_name("ADDRESS")
-                .short("a")
-                .long("address")
-                .takes_value(true)
-                .default_value("localhost")
-                .help("The address on which to listen"),
-        )
-        .arg(
-            Arg::with_name("PORT")
-                .short("p")
-                .long("port")
-                .takes_value(true)
-                .default_value("50051")
-                .help("The port on which to bind"),
-        )
-        .arg(
-            Arg::with_name("VERBOSITY")
-                .short("v")
-                .long("verbose")
-                .multiple(true)
-                .help("The level of verbosity"),
-        )
-        .subcommand(
-            SubCommand::with_name("sign")
-                .version(crate_version!())
-                .about("sign the given file")
-                .arg(
-                    Arg::with_name("SECRETKEYID")
-                        .short("k")
-                        .long("secret-key-id")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The secret key to be used when signing the file"),
-                )
-                .arg(
-                    Arg::with_name("FILE")
-                        .short("f")
-                        .long("file")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The file to sign"),
-                )
-                .arg(
-                    Arg::with_name("SIGNATURES")
-                        .short("s")
-                        .long("signature")
-                        .takes_value(true)
-                        .multiple(true)
-                        .help("The user signatures authorizing the file to be signed"),
-                )
-                .arg(
-                    Arg::with_name("OUTPUT")
-                        .short("o")
-                        .long("output")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The file to place the resulting signature in"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("threshold")
-                .version(crate_version!())
-                .about("set the threshold for a secret key")
-                .arg(
-                    Arg::with_name("SECRETKEYID")
-                        .short("k")
-                        .long("secret-key-id")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The secret key to be used when modifying the threshold"),
-                )
-                .arg(
-                    Arg::with_name("THRESHOLD")
-                        .short("t")
-                        .long("threshold")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The new threshold value (integer) for the secret key"),
-                )
-                .arg(
-                    Arg::with_name("SIGNATURES")
-                        .short("s")
-                        .long("signature")
-                        .takes_value(true)
-                        .multiple(true)
-                        .help(
-                            "The user signatures authorizing the threshold to be modified",
-                        ),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("weight")
-                .version(crate_version!())
-                .about("set the weight for a particular user key")
-                .arg(
-                    Arg::with_name("SECRETKEYID")
-                        .short("k")
-                        .long("secret-key-id")
-                        .takes_value(true)
-                        .required(true)
-                        .help(
-                            "The secret key to which the user key weight will be associated",
-                        ),
-                )
-                .arg(
-                    Arg::with_name("USERKEYID")
-                        .short("u")
-                        .long("user-key-id")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The user key to be modified"),
-                )
-                .arg(
-                    Arg::with_name("WEIGHT")
-                        .short("w")
-                        .long("weight")
-                        .takes_value(true)
-                        .required(true)
-                        .help("The new weight (integer) for the user's key"),
-                )
-                .arg(
-                    Arg::with_name("SIGNATURES")
-                        .short("s")
-                        .long("signature")
-                        .takes_value(true)
-                        .multiple(true)
-                        .help(
-                            "The user signatures authorizing the threshold to be modified",
-                        ),
-                ),
-        )
-        .setting(AppSettings::SubcommandRequired)
-        .get_matches();
+    let opts = Opt::from_args();
 
-    loggerv::init_with_verbosity(args.occurrences_of("VERBOSITY")).unwrap();
+    loggerv::init_with_verbosity(opts.verbosity)?;
 
     let env = Arc::new(EnvBuilder::new().build());
-    let ch = ChannelBuilder::new(env).connect(&format!(
-        "{}:{}",
-        args.value_of("ADDRESS").expect("address flag"),
-        args.value_of("PORT").expect("port flag")
-    ));
+    let ch = ChannelBuilder::new(env).connect(&format!("{}:{}", opts.address, opts.port));
     let client = FeroClient::new(ch);
 
-    match args.subcommand() {
-        ("sign", Some(args)) => {
+    match opts.command {
+        FeroCommand::Sign(sign_opts) => {
             let mut ident = Identification::new();
-            ident.set_secretKeyId(u64::from_str(args.value_of("SECRETKEYID").expect("secret key id"))?);
-            if let Some(signatures) = args.values_of("SIGNATURES") {
-                let mut signatures_contents = Vec::new();
-                for filename in signatures {
-                    let mut file = File::open(filename)?;
-                    let mut contents = Vec::new();
-                    file.read_to_end(&mut contents)?;
-                    signatures_contents.push(contents);
-                }
-                ident.set_signatures(RepeatedField::from_vec(signatures_contents));
+            ident.set_secretKeyId(sign_opts.secret_key_id);
+            let mut signatures_contents = Vec::new();
+            for filename in sign_opts.signatures {
+                let mut file = File::open(filename)?;
+                let mut contents = Vec::new();
+                file.read_to_end(&mut contents)?;
+                signatures_contents.push(contents);
             }
+            ident.set_signatures(RepeatedField::from_vec(signatures_contents));
 
             let mut req = SignRequest::new();
             req.set_identification(ident);
             req.set_payload({
-                let mut file = File::open(args.value_of("FILE").expect("file flag"))?;
+                let mut file = File::open(sign_opts.file)?;
                 let mut contents = Vec::new();
                 file.read_to_end(&mut contents)?;
                 contents
             });
 
             let reply = client.sign_payload(&req)?;
-            let mut output = File::create(args.value_of("OUTPUT").expect("output flag"))?;
+            let mut output = File::create(sign_opts.output)?;
             output.write_all(&reply.get_payload().to_vec())?;
 
             Ok(())
         }
-        ("threshold", Some(args)) => {
+        FeroCommand::Threshold(threshold_opts) => {
             let mut req = ThresholdRequest::new();
-            req.set_threshold(i32::from_str(
-                args.value_of("THRESHOLD").expect("threshold flag"),
-            )?);
+            req.set_threshold(threshold_opts.threshold);
 
-            client.set_secret_key_threshold(&req).map(|_| ()).map_err(|e| e.into())
+            client.set_secret_key_threshold(&req).map(|_| ())?;
+
+            Ok(())
         }
-        ("weight", Some(args)) => {
+        FeroCommand::Weight(weight_opts) => {
             let mut ident = Identification::new();
-            ident.set_secretKeyId(u64::from_str(args.value_of("SECRETKEYID").expect("secret key id"))?);
+            ident.set_secretKeyId(weight_opts.secret_key_id);
 
             let mut req = WeightRequest::new();
             req.set_identification(ident);
-            req.set_userKeyId(u64::from_str(args.value_of("USERKEYID").expect("user key id"))?);
-            req.set_weight(i32::from_str(args.value_of("WEIGHT").expect("weight flag"))?);
+            req.set_userKeyId(weight_opts.user_id);
+            req.set_weight(weight_opts.weight);
 
-            client.set_user_key_weight(&req).map(|_| ()).map_err(|e| e.into())
+            client.set_user_key_weight(&req).map(|_| ())?;
+
+            Ok(())
         }
-        _ => panic!("subcommand expected"),
     }
 }
