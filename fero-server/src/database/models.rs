@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use database::schema::{secrets, users, user_secret_weights};
+use chrono::naive::NaiveDateTime;
+
+use database::schema::{fero_logs, hsm_logs, secrets, users, user_secret_weights};
+use fero_proto::log;
 
 #[derive(Queryable)]
 pub struct SecretKey {
@@ -37,6 +40,32 @@ pub struct UserKeyWeight {
     pub weight: i32,
 }
 
+#[derive(Queryable)]
+pub struct FeroLog {
+    pub id: i32,
+    pub request_type: log::OperationType,
+    pub timestamp: NaiveDateTime,
+    pub result: log::OperationResult,
+    pub hsm_index_start: i32,
+    pub hsm_index_end: i32,
+    pub identification: Option<Vec<u8>>,
+    pub hash: Vec<u8>,
+}
+
+#[derive(Queryable)]
+pub struct HsmLog {
+    pub id: i32,
+    pub hsm_index: i32,
+    pub command: i32,
+    pub data_length: i32,
+    pub session_key: i32,
+    pub target_key: i32,
+    pub second_key: i32,
+    pub result: i32,
+    pub systick: i32,
+    pub hash: Vec<u8>,
+}
+
 #[derive(Insertable)]
 #[table_name = "secrets"]
 pub struct NewSecret {
@@ -58,4 +87,30 @@ pub struct NewWeight {
     pub user_id: i32,
     pub secret_id: i32,
     pub weight: i32,
+}
+
+#[derive(Insertable)]
+#[table_name = "fero_logs"]
+pub struct NewFeroLog {
+    pub request_type: log::OperationType,
+    pub timestamp: NaiveDateTime,
+    pub result: log::OperationResult,
+    pub hsm_index_start: i32,
+    pub hsm_index_end: i32,
+    pub identification: Option<Vec<u8>>,
+    pub hash: Vec<u8>,
+}
+
+#[derive(Insertable)]
+#[table_name = "hsm_logs"]
+pub struct NewHsmLog {
+    pub hsm_index: i32,
+    pub command: i32,
+    pub data_length: i32,
+    pub session_key: i32,
+    pub target_key: i32,
+    pub second_key: i32,
+    pub result: i32,
+    pub systick: i32,
+    pub hash: Vec<u8>,
 }
