@@ -6,7 +6,8 @@ workspace = ".."
 
 [dependencies]
 byteorder = "1"
-diesel = { version = "1", features = ["sqlite"] }
+chrono = "0.4"
+diesel = { version = "1", features = ["sqlite", "chrono"] }
 diesel_migrations = "1"
 failure = "0.1"
 futures = "0.1"
@@ -21,6 +22,8 @@ rpassword = "2"
 secstr = "0.3"
 structopt = "0.2"
 tempfile = "3.0.1"
+rand = "0.4"
+sha2 = "0.7"
 yasna = "0.1.3"
 
 [dependencies.fero-proto]

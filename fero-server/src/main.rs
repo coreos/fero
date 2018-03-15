@@ -13,6 +13,7 @@
 // limitations under the License.
 
 extern crate byteorder;
+extern crate chrono;
 #[macro_use]
 extern crate diesel;
 extern crate diesel_migrations;
@@ -32,6 +33,8 @@ extern crate pretty_good;
 extern crate protobuf;
 extern crate rpassword;
 extern crate secstr;
+extern crate rand;
+extern crate sha2;
 #[macro_use]
 extern crate structopt;
 extern crate tempfile;
