@@ -43,6 +43,7 @@ extern crate yasna;
 mod database;
 mod hsm;
 mod local;
+mod logging;
 mod service;
 #[cfg(test)]
 mod test;
