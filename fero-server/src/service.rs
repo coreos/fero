@@ -21,8 +21,9 @@ use pretty_good::{HashAlgorithm, Packet};
 use database::Configuration;
 use fero_proto::fero::*;
 use fero_proto::fero_grpc::*;
+use fero_proto::log::*;
 use hsm::*;
-
+use logging;
 
 #[derive(Clone)]
 pub struct FeroService {
@@ -31,80 +32,108 @@ pub struct FeroService {
 }
 
 impl Fero for FeroService {
-    fn sign_payload(&self, ctx: RpcContext, req: SignRequest, sink: UnarySink<SignResponse>) {
-        match self.sign_payload(
-            req.get_identification(),
-            req.get_payload(),
-        ) {
+    fn sign_payload(&self, ctx: RpcContext, mut req: SignRequest, sink: UnarySink<SignResponse>) {
+        let operation_result = self.sign_payload(req.get_identification(), req.get_payload());
+
+        let logged_result = match operation_result {
+            Ok(_) => OperationResult::Success,
+            Err(_) => OperationResult::Failure,
+        };
+
+        logging::log_operation(
+            &self.signer,
+            &self.database,
+            OperationType::Sign,
+            logged_result,
+            Some(req.take_identification()),
+        ).unwrap_or_else(|e| panic!("Failed to log an operation: {}", e));
+
+        match operation_result {
             Ok(signature) => {
                 let mut response = SignResponse::new();
                 response.set_payload(signature);
-
                 ctx.spawn(sink.success(response).map_err(move |err| {
                     error!("failed to reply {:?}: {:?}", req, err)
                 }))
             }
-            Err(err) => {
-                info!("Failed to sign payload: {}", err);
-                ctx.spawn(
-                    sink.fail(RpcStatus {
-                        status: grpcio::RpcStatusCode::PermissionDenied,
-                        details: Some("Failed to sign payload".to_string()),
-                    }).map_err(move |err| error!("failed to reply {:?}: {:?}", req, err)),
-                )
+            Err(e) => {
+                warn!("Failed to sign payload: {}", e);
+                ctx.spawn(sink.fail(RpcStatus {
+                    status: grpcio::RpcStatusCode::PermissionDenied,
+                    details: Some(format!("{}", e)),
+                }).map_err(move |err| error!("failed to reply {:?}: {:?}", req, err)))
             }
-        }
+        };
     }
 
     fn set_secret_key_threshold(
         &self,
         ctx: RpcContext,
-        req: ThresholdRequest,
+        mut req: ThresholdRequest,
         sink: UnarySink<ThresholdResponse>,
     ) {
-        match self.set_secret_key_threshold(req.get_identification(), req.get_threshold()) {
-            Ok(()) => {
-                ctx.spawn(sink.success(ThresholdResponse::new()).map_err(move |err| {
-                    error!("failed to reply {:?}: {:?}", req, err)
-                }))
-            }
-            Err(err) => {
-                info!("Failed to update secret key threshold: {}", err);
-                ctx.spawn(
-                    sink.fail(RpcStatus {
-                        status: grpcio::RpcStatusCode::InvalidArgument,
-                        details: Some("Failed to update secret key threshold".to_string()),
-                    }).map_err(move |err| error!("failed to reply {:?}: {:?}", req, err)),
-                )
-            }
+        let operation_result = self.set_secret_key_threshold(
+            req.get_identification(),
+            req.get_threshold(),
+        );
+
+        let logged_result = match operation_result {
+            Ok(_) => OperationResult::Success,
+            Err(_) => OperationResult::Failure,
+        };
+
+        logging::log_operation(
+            &self.signer,
+            &self.database,
+            OperationType::Threshold,
+            logged_result,
+            Some(req.take_identification()),
+        ).unwrap_or_else(|e| panic!("Failed to log an operation: {}", e));
+
+        match operation_result {
+            Ok(_) => ctx.spawn(sink.success(ThresholdResponse::new()).map_err(move |err| {
+                error!("failed to reply {:?}: {:?}", req, err)
+            })),
+            Err(e) => ctx.spawn(sink.fail(RpcStatus {
+                status: grpcio::RpcStatusCode::InvalidArgument,
+                details: Some(format!("{}", e)),
+            }).map_err(move |err| error!("failed to reply {:?}: {:?}", req, err))),
         }
     }
 
     fn set_user_key_weight(
         &self,
         ctx: RpcContext,
-        req: WeightRequest,
+        mut req: WeightRequest,
         sink: UnarySink<WeightResponse>,
     ) {
-        match self.set_user_key_weight(
+        let operation_result = self.set_user_key_weight(
             req.get_identification(),
             req.get_userKeyId(),
             req.get_weight(),
-        ) {
-            Ok(()) => {
-                ctx.spawn(sink.success(WeightResponse::new()).map_err(move |err| {
-                    error!("failed to reply {:?}: {:?}", req, err)
-                }))
-            }
-            Err(err) => {
-                info!("Failed to update user key weight: {}", err);
-                ctx.spawn(
-                    sink.fail(RpcStatus {
-                        status: grpcio::RpcStatusCode::InvalidArgument,
-                        details: Some("Failed to update user key weight".to_string()),
-                    }).map_err(move |err| error!("failed to reply {:?}: {:?}", req, err)),
-                )
-            }
+        );
+
+        let logged_result = match operation_result {
+            Ok(_) => OperationResult::Success,
+            Err(_) => OperationResult::Failure,
+        };
+
+        logging::log_operation(
+            &self.signer,
+            &self.database,
+            OperationType::Weight,
+            logged_result,
+            Some(req.take_identification()),
+        ).unwrap_or_else(|e| panic!("Failed to log an operation: {}", e));
+
+        match operation_result {
+            Ok(_) => ctx.spawn(sink.success(WeightResponse::new()).map_err(move |err| {
+                error!("failed to reply {:?}: {:?}", req, err)
+            })),
+            Err(e) => ctx.spawn(sink.fail(RpcStatus {
+                status: grpcio::RpcStatusCode::InvalidArgument,
+                details: Some(format!("{}", e)),
+            }).map_err(move |err| error!("failed to reply {:?}: {:?}", req, err))),
         }
     }
 
