@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use byteorder::{BigEndian, ByteOrder};
 use chrono::naive::NaiveDateTime;
+use rand::{self, Rng};
+use sha2::{Sha256, Digest};
 
 use database::schema::{fero_logs, hsm_logs, secrets, users, user_secret_weights};
 use fero_proto::log;
@@ -99,6 +102,31 @@ pub struct NewFeroLog {
     pub hsm_index_end: i32,
     pub identification: Option<Vec<u8>>,
     pub hash: Vec<u8>,
+}
+
+impl Default for NewFeroLog {
+    fn default() -> Self {
+        let mut hasher = Sha256::default();
+        let mut rng = rand::thread_rng();
+
+        let mut buf = [0u8; 8];
+        for _ in 0..4 {
+            BigEndian::write_u64(&mut buf, rng.next_u64());
+            hasher.input(&buf);
+        }
+
+        let hash: &[u8] = &hasher.result();
+
+        NewFeroLog {
+            request_type: log::OperationType::Sign,
+            timestamp: NaiveDateTime::from_timestamp(0, 0),
+            result: log::OperationResult::Success,
+            hsm_index_start: 0,
+            hsm_index_end: 0,
+            identification: None,
+            hash: Vec::from(hash),
+        }
+    }
 }
 
 #[derive(Insertable)]
