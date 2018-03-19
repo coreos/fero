@@ -47,6 +47,22 @@ impl Fero for FeroService {
         req: ThresholdRequest,
         sink: UnarySink<ThresholdResponse>,
     ) {
+        match self.set_secret_key_threshold(req.get_identification(), req.get_threshold()) {
+            Ok(()) => {
+                ctx.spawn(sink.success(ThresholdResponse::new()).map_err(move |err| {
+                    error!("failed to reply {:?}: {:?}", req, err)
+                }))
+            }
+            Err(err) => {
+                info!("Failed to update secret key threshold: {}", err);
+                ctx.spawn(
+                    sink.fail(RpcStatus {
+                        status: grpcio::RpcStatusCode::InvalidArgument,
+                        details: Some("Failed to update secret key threshold".to_string()),
+                    }).map_err(move |err| error!("failed to reply {:?}: {:?}", req, err)),
+                )
+            }
+        }
     }
 
     fn set_user_key_weight(
@@ -81,6 +97,16 @@ impl Fero for FeroService {
 impl FeroService {
     pub fn new(database: Configuration, signer: HsmSigner) -> FeroService {
         FeroService { database, signer }
+    }
+
+    fn set_secret_key_threshold(
+        &self,
+        ident: &Identification,
+        threshold: i32,
+    ) -> Result<(), Error> {
+        let (conn, _) = self.database.authenticate(ident, &[threshold as u8])?;
+
+        conn.set_secret_key_threshold(ident.get_secretKeyId(), threshold)
     }
 
     fn set_user_key_weight(
