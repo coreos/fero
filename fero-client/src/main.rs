@@ -9,6 +9,7 @@ extern crate structopt;
 
 use std::fs::File;
 use std::io::{Read, Write};
+use std::num::ParseIntError;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -38,7 +39,7 @@ struct Opt {
 
 #[derive(StructOpt)]
 struct SignCommand {
-    #[structopt(short = "k", long = "secret-key-id")]
+    #[structopt(short = "k", long = "secret-key-id", parse(try_from_str = "parse_hex"))]
     /// The secret key id to sign with.
     secret_key_id: u64,
     #[structopt(short = "f", long = "file", parse(from_os_str))]
@@ -54,7 +55,7 @@ struct SignCommand {
 
 #[derive(StructOpt)]
 struct ThresholdCommand {
-    #[structopt(short = "k", long = "secret-key-id")]
+    #[structopt(short = "k", long = "secret-key-id", parse(try_from_str = "parse_hex"))]
     /// The secret key id to update.
     secret_key_id: u64,
     #[structopt(short = "t", long = "threshold")]
@@ -67,7 +68,7 @@ struct ThresholdCommand {
 
 #[derive(StructOpt)]
 struct WeightCommand {
-    #[structopt(short = "k", long = "secret-key-id")]
+    #[structopt(short = "k", long = "secret-key-id", parse(try_from_str = "parse_hex"))]
     /// The secret key id to update.
     secret_key_id: u64,
     #[structopt(short = "u", long = "user-id")]
@@ -92,6 +93,14 @@ enum FeroCommand {
     #[structopt(name = "weight")]
     /// Update a given user's weight for a given secret key.
     Weight(WeightCommand),
+}
+
+fn parse_hex(s: &str) -> Result<u64, ParseIntError> {
+    if s.starts_with("0x") {
+        u64::from_str_radix(&s[2..], 16)
+    } else {
+        u64::from_str_radix(s, 16)
+    }
 }
 
 pub fn main() {
