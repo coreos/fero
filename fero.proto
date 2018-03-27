@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+service Fero {
+	rpc SignPayload           (SignRequest)      returns (SignResponse);
+	rpc SetSecretKeyThreshold (ThresholdRequest) returns (ThresholdResponse);
+	rpc SetUserKeyWeight      (WeightRequest)    returns (WeightResponse);
+}
+
+message Identification {
+	uint64 secretKeyId = 1;
+	repeated bytes signatures = 2;
+}
+
+message SignRequest {
+	Identification identification = 1;
+	bytes payload = 2;
+}
+
+message ThresholdRequest {
+	Identification identification = 1;
+	int32 threshold = 2;
+}
+
+message WeightRequest {
+	Identification identification = 1;
+	uint64 userKeyId = 2;
+	int32 weight = 3;
+}
+
+message SignResponse {
+	bytes payload = 1;
+}
+
+message ThresholdResponse {}
+
+message WeightResponse {}
