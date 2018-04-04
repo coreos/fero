@@ -5,6 +5,7 @@ pub struct SecretKey {
     pub id: i32,
     pub key_id: i64,
     pub threshold: i32,
+    pub hsm_id: i32,
 }
 
 #[derive(Queryable)]
@@ -26,6 +27,7 @@ pub struct UserKeyWeight {
 pub struct NewSecret {
     pub key_id: i64,
     pub threshold: i32,
+    pub hsm_id: i32,
 }
 
 #[derive(Insertable)]
