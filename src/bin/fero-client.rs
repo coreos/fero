@@ -8,15 +8,17 @@ extern crate log;
 extern crate loggerv;
 extern crate protobuf;
 
-use clap::{Arg, App, AppSettings, SubCommand};
-use failure::Error;
-use fero::{Identification, FeroClient, SignRequest, ThresholdRequest, WeightRequest};
-use grpcio::{ChannelBuilder, EnvBuilder};
-use protobuf::repeated::RepeatedField;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::str::FromStr;
 use std::sync::Arc;
+
+use clap::{Arg, App, AppSettings, SubCommand};
+use failure::Error;
+use grpcio::{ChannelBuilder, EnvBuilder};
+use protobuf::repeated::RepeatedField;
+
+use fero::{Identification, FeroClient, SignRequest, ThresholdRequest, WeightRequest};
 
 pub fn main() {
     if let Err(e) = run() {
