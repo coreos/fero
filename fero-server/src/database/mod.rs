@@ -37,20 +37,20 @@ impl Configuration {
 
         let mut gpg = Context::from_protocol(Protocol::OpenPgp).unwrap();
         let mut ids = HashSet::new();
-        let mut data = Vec::new();
         for signature in &ident.signatures {
+            let mut data = Vec::new();
             let verification = gpg.verify_opaque(signature, &mut data)?;
 
             // TODO can verify_opaque verify the payload?
             if data != payload {
-                bail!("Signature received was for incorrect payload");
+                continue;
             }
 
             for signature in verification.signatures() {
                 // It seems gpgme is not filling in the .key() field here, so we retrieve it from
                 // gpgme via the fingerprint of the signature.
                 let signing_key = gpg.find_key(signature.fingerprint().unwrap()).unwrap();
-                ids.insert(i64::from_str_radix(signing_key.id().unwrap(), 16)?);
+                ids.insert(u64::from_str_radix(signing_key.id().unwrap(), 16)? as i64);
                 // TODO
                 //ids.insert(signature.key().unwrap().primary_key().unwrap().id().chain_err(|| "Failed to read key id")?);
             }
@@ -59,25 +59,25 @@ impl Configuration {
         let mut weight = 0;
         for id in ids {
             // TODO use JOIN
-            let user = schema::users::dsl::users
+            if let Some(user) = schema::users::dsl::users
                 .filter(schema::users::columns::key_id.eq(id))
                 .load::<UserKey>(&conn)?
-                .pop()
-                .ok_or(format_err!("No such user key"))?;
+                .pop() {
+                weight += schema::user_secret_weights::dsl::user_secret_weights
+                    .filter(schema::user_secret_weights::columns::secret_id.eq(
+                        secret.id,
+                    ))
+                    .filter(schema::user_secret_weights::columns::user_id.eq(user.id))
+                    .load::<UserKeyWeight>(&conn)?
+                    .pop()
+                    .map(|w| w.weight)
+                    .unwrap_or(0)
+            }
 
-            weight += schema::user_secret_weights::dsl::user_secret_weights
-                .filter(schema::user_secret_weights::columns::secret_id.eq(
-                    secret.id,
-                ))
-                .filter(schema::user_secret_weights::columns::user_id.eq(user.id))
-                .load::<UserKeyWeight>(&conn)?
-                .pop()
-                .map(|w| w.weight)
-                .unwrap_or(0)
         }
 
         if weight >= secret.threshold {
-            Ok((AuthenticatedConnection { connection: conn, secret_key: ident.secretKeyId }, data))
+            Ok((AuthenticatedConnection { connection: conn, secret_key: ident.secretKeyId }, payload.to_vec()))
         } else {
             bail!("Signatures do not meet threshold");
         }
