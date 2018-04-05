@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_use]
-extern crate clap;
 extern crate failure;
 extern crate fero_proto;
 extern crate futures;
@@ -21,22 +19,42 @@ extern crate grpcio;
 #[macro_use]
 extern crate log;
 extern crate loggerv;
-//extern crate protobuf;
+#[macro_use]
+extern crate structopt;
 
 mod service;
 
 use std::io::{self, Read};
-use std::str::FromStr;
 use std::sync::Arc;
 use std::thread;
 
-use clap::{App, Arg};
 use failure::Error;
 use futures::{Future, sync::oneshot};
 use grpcio::{Environment, ServerBuilder, Server};
+use structopt::StructOpt;
 
 use fero_proto::fero_grpc::create_fero;
 use service::*;
+
+#[derive(StructOpt)]
+#[structopt(name = "fero-bastion")]
+struct Opt {
+    #[structopt(short = "a", long = "address", default_value = "0.0.0.0")]
+    /// The address to listen on.
+    address: String,
+    #[structopt(short = "p", long = "port", default_value = "50051")]
+    /// The port to listen on.
+    port: u16,
+    #[structopt(short = "v", parse(from_occurrences))]
+    /// Verbosity.
+    verbosity: u64,
+    #[structopt(short = "s", long = "server-address")]
+    /// The address of the server to make requests to.
+    server_address: String,
+    #[structopt(short = "r", long = "server-port", default_value = "50051")]
+    /// The port of the server to make requests to.
+    server_port: u16,
+}
 
 fn create_bastion(
     address: &str,
@@ -45,10 +63,7 @@ fn create_bastion(
     server_port: u16,
 ) -> Result<Server, Error> {
     ServerBuilder::new(Arc::new(Environment::new(1)))
-        .register_service(create_fero(FeroBastion::new(
-            server_address,
-            server_port,
-        )))
+        .register_service(create_fero(FeroBastion::new(server_address, server_port)))
         .bind(address, port)
         .build()
         .map_err(|e| e.into())
@@ -62,58 +77,16 @@ pub fn main() {
 }
 
 fn run() -> Result<(), Error> {
-    let args = App::new(crate_name!())
-        .version(crate_version!())
-        .about(crate_description!())
-        .arg(
-            Arg::with_name("ADDRESS")
-                .short("a")
-                .long("address")
-                .takes_value(true)
-                .default_value("localhost")
-                .help("The address on which to listen"),
-        )
-        .arg(
-            Arg::with_name("PORT")
-                .short("p")
-                .long("port")
-                .takes_value(true)
-                .default_value("50051")
-                .help("The port on which to bind"),
-        )
-        .arg(
-            Arg::with_name("SERVER_ADDRESS")
-                .short("s")
-                .long("server-address")
-                .takes_value(true)
-                .help("The address of the server to act as bastion for."),
-        )
-        .arg(
-            Arg::with_name("SERVER_PORT")
-                .short("r")
-                .long("server-port")
-                .takes_value(true)
-                .default_value("50051")
-                .help("The port of the server to act as bastion for."),
-        )
-        .arg(
-            Arg::with_name("VERBOSITY")
-                .short("v")
-                .long("verbose")
-                .multiple(true)
-                .help("The level of verbosity"),
-        )
-        .get_matches();
+    let opts = Opt::from_args();
 
-    loggerv::init_with_verbosity(args.occurrences_of("VERBOSITY")).unwrap();
+    loggerv::init_with_verbosity(opts.verbosity)?;
 
-    let address = args.value_of("ADDRESS").expect("address flag");
-    let port = u16::from_str(args.value_of("PORT").expect("port flag"))?;
-    let server_address = args.value_of("SERVER_ADDRESS")
-        .expect("server address flag");
-    let server_port = u16::from_str(args.value_of("SERVER_PORT").expect("server port flag"))?;
-
-    let mut bastion = create_bastion(address, port, server_address, server_port)?;
+    let mut bastion = create_bastion(
+        &opts.address,
+        opts.port,
+        &opts.server_address,
+        opts.server_port,
+    )?;
 
     bastion.start();
     let (tx, rx) = oneshot::channel();
