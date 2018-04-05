@@ -1,3 +1,4 @@
+use byteorder::{BigEndian, WriteBytesExt};
 use failure::Error;
 use futures::Future;
 use grpcio::{self, RpcContext, RpcStatus, UnarySink};
@@ -104,7 +105,11 @@ impl FeroService {
         ident: &Identification,
         threshold: i32,
     ) -> Result<(), Error> {
-        let (conn, _) = self.database.authenticate(ident, &[threshold as u8])?;
+        let mut payload = Vec::new();
+        payload.write_u64::<BigEndian>(ident.get_secretKeyId())?;
+        payload.write_i32::<BigEndian>(threshold)?;
+
+        let (conn, _) = self.database.authenticate(ident, &payload)?;
 
         conn.set_secret_key_threshold(ident.get_secretKeyId(), threshold)
     }
@@ -115,10 +120,15 @@ impl FeroService {
         user_key_id: u64,
         weight: i32,
     ) -> Result<(), Error> {
-        let (conn, _) = self.database.authenticate(ident, &[weight as u8])?;
+        let mut payload = Vec::new();
+        payload.write_u64::<BigEndian>(ident.get_secretKeyId())?;
+        payload.write_u64::<BigEndian>(user_key_id)?;
+        payload.write_i32::<BigEndian>(weight)?;
 
-        let user = conn.upsert_user_key(user_key_id as u64)?;
-        conn.upsert_user_key_weight(ident.secretKeyId as u64, user, weight)
+        let (conn, _) = self.database.authenticate(ident, &payload)?;
+
+        let user = conn.upsert_user_key(user_key_id)?;
+        conn.upsert_user_key_weight(ident.get_secretKeyId(), user, weight)
     }
 
     fn sign_payload(

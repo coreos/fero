@@ -272,6 +272,7 @@ dependencies = [
 name = "fero-server"
 version = "0.1.0"
 dependencies = [
+ "byteorder 1.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "diesel 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "fero-proto 0.1.0",
