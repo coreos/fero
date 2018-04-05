@@ -1,21 +1,56 @@
 #[macro_use]
 extern crate clap;
+#[macro_use]
 extern crate diesel;
+#[macro_use]
 extern crate failure;
-extern crate fero;
+extern crate fero_proto;
 extern crate futures;
+extern crate gpgme;
+extern crate grpcio;
+extern crate libyubihsm;
 #[macro_use]
 extern crate log;
 extern crate loggerv;
+extern crate num;
+extern crate pretty_good;
+extern crate protobuf;
+extern crate yasna;
+
+mod database;
+mod hsm;
+mod service;
 
 use std::io::{self, Read};
 use std::str::FromStr;
+use std::sync::Arc;
 use std::thread;
 
 use clap::{Arg, App};
 use failure::Error;
 use futures::Future;
 use futures::sync::oneshot;
+use grpcio::{Environment, Server, ServerBuilder};
+
+use fero_proto::fero_grpc::create_fero;
+
+fn create_server(
+    address: &str,
+    port: u16,
+    database: &str,
+    hsm_connector: &str,
+    hsm_authkey: u16,
+    hsm_password: &str,
+) -> Result<Server, Error> {
+    ServerBuilder::new(Arc::new(Environment::new(1)))
+        .register_service(create_fero(service::FeroService::new(
+            database::Configuration::new(database),
+            hsm::HsmSigner::new(hsm_connector, hsm_authkey, hsm_password)?,
+        )))
+        .bind(address, port)
+        .build()
+        .map_err(|e| e.into())
+}
 
 pub fn main() {
     if let Err(e) = run() {
@@ -94,7 +129,7 @@ fn run() -> Result<(), Error> {
     let hsm_authkey = u16::from_str(args.value_of("HSM_AUTHKEY").expect("authkey flag"))?;
     let hsm_password = args.value_of("HSM_PASSWORD").expect("HSM password flag");
 
-    let mut server = fero::create_server(
+    let mut server = create_server(
         address,
         port,
         database,

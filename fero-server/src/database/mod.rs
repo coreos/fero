@@ -9,8 +9,8 @@ use diesel::sqlite::SqliteConnection;
 use failure::Error;
 use gpgme::{Context, Protocol};
 
+use fero_proto::fero::*;
 use self::models::*;
-pub use types::fero::*;
 
 #[derive(Clone)]
 pub struct Configuration {

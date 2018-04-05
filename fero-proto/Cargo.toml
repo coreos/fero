@@ -1,0 +1,16 @@
+[package]
+name = "fero-proto"
+version = "0.1.0"
+authors = ["Alex Crawford <alex.crawford@coreos.com>"]
+workspace = ".."
+
+[dependencies]
+futures = "0.1"
+grpcio = "0.2"
+protobuf = "1.4"
+
+[build-dependencies]
+grpcio-compiler = "0.2"
+tempdir = "0.3"
+protobuf = "1.4"
+protoc = "1.4"

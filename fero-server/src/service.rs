@@ -1,13 +1,12 @@
 use failure::Error;
 use futures::Future;
-use gpgme::{Context, Protocol};
 use grpcio::{self, RpcContext, RpcStatus, UnarySink};
 use pretty_good::{HashAlgorithm, Packet};
 
 use database::Configuration;
+use fero_proto::fero::*;
+use fero_proto::fero_grpc::*;
 use hsm::*;
-pub use types::fero::*;
-pub use types::fero_grpc::*;
 
 
 #[derive(Clone)]

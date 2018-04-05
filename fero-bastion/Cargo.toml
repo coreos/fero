@@ -1,0 +1,16 @@
+[package]
+name = "fero-bastion"
+version = "0.1.0"
+authors = ["Alex Crawford <alex.crawford@coreos.com>"]
+workspace = ".."
+
+[dependencies]
+clap = "2"
+failure = "0.1"
+futures = "0.1"
+grpcio = "0.2"
+log = "0.4"
+loggerv = "0.7"
+
+[dependencies.fero-proto]
+path = "../fero-proto/"

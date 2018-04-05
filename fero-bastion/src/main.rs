@@ -15,21 +15,44 @@
 #[macro_use]
 extern crate clap;
 extern crate failure;
-extern crate fero;
+extern crate fero_proto;
 extern crate futures;
 extern crate grpcio;
 #[macro_use]
 extern crate log;
 extern crate loggerv;
-extern crate protobuf;
+//extern crate protobuf;
+
+mod service;
 
 use std::io::{self, Read};
 use std::str::FromStr;
+use std::sync::Arc;
 use std::thread;
 
 use clap::{App, Arg};
 use failure::Error;
 use futures::{Future, sync::oneshot};
+use grpcio::{Environment, ServerBuilder, Server};
+
+use fero_proto::fero_grpc::create_fero;
+use service::*;
+
+fn create_bastion(
+    address: &str,
+    port: u16,
+    server_address: &str,
+    server_port: u16,
+) -> Result<Server, Error> {
+    ServerBuilder::new(Arc::new(Environment::new(1)))
+        .register_service(create_fero(FeroBastion::new(
+            server_address,
+            server_port,
+        )))
+        .bind(address, port)
+        .build()
+        .map_err(|e| e.into())
+}
 
 pub fn main() {
     if let Err(e) = run() {
@@ -90,7 +113,7 @@ fn run() -> Result<(), Error> {
         .expect("server address flag");
     let server_port = u16::from_str(args.value_of("SERVER_PORT").expect("server port flag"))?;
 
-    let mut bastion = fero::create_bastion(address, port, server_address, server_port)?;
+    let mut bastion = create_bastion(address, port, server_address, server_port)?;
 
     bastion.start();
     let (tx, rx) = oneshot::channel();

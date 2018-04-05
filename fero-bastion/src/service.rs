@@ -17,8 +17,8 @@ use std::sync::Arc;
 use futures::Future;
 use grpcio::{self, ChannelBuilder, EnvBuilder, RpcContext, RpcStatus, UnarySink};
 
-use types::fero::*;
-use types::fero_grpc::*;
+use fero_proto::fero::*;
+use fero_proto::fero_grpc::*;
 
 #[derive(Clone)]
 pub struct FeroBastion {
