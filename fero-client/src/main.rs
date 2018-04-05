@@ -1,3 +1,4 @@
+extern crate byteorder;
 extern crate failure;
 extern crate fero_proto;
 extern crate grpcio;
@@ -13,6 +14,7 @@ use std::num::ParseIntError;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use byteorder::{BigEndian, WriteBytesExt};
 use failure::Error;
 use grpcio::{ChannelBuilder, EnvBuilder};
 use protobuf::repeated::RepeatedField;
@@ -67,11 +69,24 @@ struct ThresholdCommand {
 }
 
 #[derive(StructOpt)]
+struct ThresholdPayloadCommand {
+    #[structopt(short = "k", long = "secret-key-id", parse(try_from_str = "parse_hex"))]
+    /// The secret key id to update.
+    secret_key_id: u64,
+    #[structopt(short = "t", long = "threshold")]
+    /// The new threshold to set.
+    threshold: i32,
+    #[structopt(short = "f", long = "file", parse(from_os_str))]
+    /// The file to output the payload into.
+    file: PathBuf,
+}
+
+#[derive(StructOpt)]
 struct WeightCommand {
     #[structopt(short = "k", long = "secret-key-id", parse(try_from_str = "parse_hex"))]
     /// The secret key id to update.
     secret_key_id: u64,
-    #[structopt(short = "u", long = "user-id")]
+    #[structopt(short = "u", long = "user-id", parse(try_from_str = "parse_hex"))]
     /// The user whose weight is to be updated.
     user_id: u64,
     #[structopt(short = "w", long = "weight")]
@@ -83,13 +98,35 @@ struct WeightCommand {
 }
 
 #[derive(StructOpt)]
+struct WeightPayloadCommand {
+    #[structopt(short = "k", long = "secret-key-id", parse(try_from_str = "parse_hex"))]
+    /// The secret key id to update.
+    secret_key_id: u64,
+    #[structopt(short = "u", long = "user-id", parse(try_from_str = "parse_hex"))]
+    /// The user whose weight is to be updated.
+    user_id: u64,
+    #[structopt(short = "w", long = "weight")]
+    /// The new weight.
+    weight: i32,
+    #[structopt(short = "f", long = "file", parse(from_os_str))]
+    /// The file to output the payload into.
+    file: PathBuf,
+}
+
+#[derive(StructOpt)]
 enum FeroCommand {
     #[structopt(name = "sign")]
     /// Sign the given file.
     Sign(SignCommand),
+    #[structopt(name = "threshold-payload")]
+    /// Generate a signable payload for a threshold request.
+    ThresholdPayload(ThresholdPayloadCommand),
     #[structopt(name = "threshold")]
     /// Update the threshold for a given secret key.
     Threshold(ThresholdCommand),
+    #[structopt(name = "weight-payload")]
+    /// Generate a signable payload for a weight request.
+    WeightPayload(WeightPayloadCommand),
     #[structopt(name = "weight")]
     /// Update a given user's weight for a given secret key.
     Weight(WeightCommand),
@@ -110,6 +147,19 @@ pub fn main() {
     }
 }
 
+fn build_signatures(signature_files: &[PathBuf]) -> Result<Vec<Vec<u8>>, Error> {
+    let mut signatures_contents = Vec::new();
+
+    for filename in signature_files {
+        let mut file = File::open(filename)?;
+        let mut contents = Vec::new();
+        file.read_to_end(&mut contents)?;
+        signatures_contents.push(contents);
+    }
+
+    Ok(signatures_contents)
+}
+
 fn run() -> Result<(), Error> {
     let opts = Opt::from_args();
 
@@ -123,14 +173,7 @@ fn run() -> Result<(), Error> {
         FeroCommand::Sign(sign_opts) => {
             let mut ident = Identification::new();
             ident.set_secretKeyId(sign_opts.secret_key_id);
-            let mut signatures_contents = Vec::new();
-            for filename in sign_opts.signatures {
-                let mut file = File::open(filename)?;
-                let mut contents = Vec::new();
-                file.read_to_end(&mut contents)?;
-                signatures_contents.push(contents);
-            }
-            ident.set_signatures(RepeatedField::from_vec(signatures_contents));
+            ident.set_signatures(RepeatedField::from_vec(build_signatures(&sign_opts.signatures)?));
 
             let mut req = SignRequest::new();
             req.set_identification(ident);
@@ -144,20 +187,39 @@ fn run() -> Result<(), Error> {
             let reply = client.sign_payload(&req)?;
             let mut output = File::create(sign_opts.output)?;
             output.write_all(&reply.get_payload().to_vec())?;
+        }
+        FeroCommand::ThresholdPayload(threshold_opts) => {
+            let mut payload = Vec::new();
+            payload.write_u64::<BigEndian>(threshold_opts.secret_key_id)?;
+            payload.write_i32::<BigEndian>(threshold_opts.threshold)?;
 
-            Ok(())
+            let mut file = File::create(threshold_opts.file)?;
+            file.write_all(&payload)?;
         }
         FeroCommand::Threshold(threshold_opts) => {
+            let mut ident = Identification::new();
+            ident.set_secretKeyId(threshold_opts.secret_key_id);
+            ident.set_signatures(RepeatedField::from_vec(build_signatures(&threshold_opts.signatures)?));
+
             let mut req = ThresholdRequest::new();
+            req.set_identification(ident);
             req.set_threshold(threshold_opts.threshold);
 
             client.set_secret_key_threshold(&req).map(|_| ())?;
+        }
+        FeroCommand::WeightPayload(weight_opts) => {
+            let mut payload = Vec::new();
+            payload.write_u64::<BigEndian>(weight_opts.secret_key_id)?;
+            payload.write_u64::<BigEndian>(weight_opts.user_id)?;
+            payload.write_i32::<BigEndian>(weight_opts.weight)?;
 
-            Ok(())
+            let mut file = File::create(weight_opts.file)?;
+            file.write_all(&payload)?;
         }
         FeroCommand::Weight(weight_opts) => {
             let mut ident = Identification::new();
             ident.set_secretKeyId(weight_opts.secret_key_id);
+            ident.set_signatures(RepeatedField::from_vec(build_signatures(&weight_opts.signatures)?));
 
             let mut req = WeightRequest::new();
             req.set_identification(ident);
@@ -165,8 +227,8 @@ fn run() -> Result<(), Error> {
             req.set_weight(weight_opts.weight);
 
             client.set_user_key_weight(&req).map(|_| ())?;
-
-            Ok(())
         }
     }
+
+    Ok(())
 }

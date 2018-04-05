@@ -5,6 +5,7 @@ authors = ["Alex Crawford <alex.crawford@coreos.com>"]
 workspace = ".."
 
 [dependencies]
+byteorder = "1"
 failure = "0.1"
 grpcio = "0.2"
 log = "0.4"
