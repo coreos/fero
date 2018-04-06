@@ -1,3 +1,4 @@
+use byteorder::{BigEndian, WriteBytesExt};
 use failure::Error;
 use futures::Future;
 use grpcio::{self, RpcContext, RpcStatus, UnarySink};
@@ -47,6 +48,22 @@ impl Fero for FeroService {
         req: ThresholdRequest,
         sink: UnarySink<ThresholdResponse>,
     ) {
+        match self.set_secret_key_threshold(req.get_identification(), req.get_threshold()) {
+            Ok(()) => {
+                ctx.spawn(sink.success(ThresholdResponse::new()).map_err(move |err| {
+                    error!("failed to reply {:?}: {:?}", req, err)
+                }))
+            }
+            Err(err) => {
+                info!("Failed to update secret key threshold: {}", err);
+                ctx.spawn(
+                    sink.fail(RpcStatus {
+                        status: grpcio::RpcStatusCode::InvalidArgument,
+                        details: Some("Failed to update secret key threshold".to_string()),
+                    }).map_err(move |err| error!("failed to reply {:?}: {:?}", req, err)),
+                )
+            }
+        }
     }
 
     fn set_user_key_weight(
@@ -83,16 +100,35 @@ impl FeroService {
         FeroService { database, signer }
     }
 
+    fn set_secret_key_threshold(
+        &self,
+        ident: &Identification,
+        threshold: i32,
+    ) -> Result<(), Error> {
+        let mut payload = Vec::new();
+        payload.write_u64::<BigEndian>(ident.get_secretKeyId())?;
+        payload.write_i32::<BigEndian>(threshold)?;
+
+        let (conn, _) = self.database.authenticate(ident, &payload)?;
+
+        conn.set_secret_key_threshold(ident.get_secretKeyId(), threshold)
+    }
+
     fn set_user_key_weight(
         &self,
         ident: &Identification,
         user_key_id: u64,
         weight: i32,
     ) -> Result<(), Error> {
-        let (conn, _) = self.database.authenticate(ident, &[weight as u8])?;
+        let mut payload = Vec::new();
+        payload.write_u64::<BigEndian>(ident.get_secretKeyId())?;
+        payload.write_u64::<BigEndian>(user_key_id)?;
+        payload.write_i32::<BigEndian>(weight)?;
 
-        let user = conn.upsert_user_key(user_key_id as u64)?;
-        conn.upsert_user_key_weight(ident.secretKeyId as u64, user, weight)
+        let (conn, _) = self.database.authenticate(ident, &payload)?;
+
+        let user = conn.upsert_user_key(user_key_id)?;
+        conn.upsert_user_key_weight(ident.get_secretKeyId(), user, weight)
     }
 
     fn sign_payload(

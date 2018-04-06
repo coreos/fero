@@ -5,6 +5,7 @@ authors = ["Alex Crawford <alex.crawford@coreos.com>"]
 workspace = ".."
 
 [dependencies]
+byteorder = "1"
 diesel = { version = "1", features = ["sqlite"] }
 failure = "0.1"
 futures = "0.1"

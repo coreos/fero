@@ -153,4 +153,14 @@ impl AuthenticatedConnection {
                 .map_err(|e| e.into())
         }
     }
+
+    pub fn set_secret_key_threshold(&self, secret_key_id: u64, threshold: i32) -> Result<(), Error> {
+        diesel::update(
+            schema::secrets::dsl::secrets.filter(
+                schema::secrets::columns::key_id.eq(secret_key_id as i64)))
+            .set(schema::secrets::dsl::threshold.eq(threshold))
+            .execute(&self.connection)
+            .map(|_| ())
+            .map_err(|e| e.into())
+    }
 }
