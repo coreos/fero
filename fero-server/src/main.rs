@@ -71,7 +71,7 @@ fn create_server(
     ServerBuilder::new(Arc::new(Environment::new(1)))
         .register_service(create_fero(service::FeroService::new(
             database::Configuration::new(database),
-            hsm::HsmSigner::new(hsm_connector, hsm_authkey, hsm_password)?,
+            hsm::Hsm::new(hsm_connector, hsm_authkey, hsm_password)?,
         )))
         .bind(address, port)
         .build()

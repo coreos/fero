@@ -5,19 +5,20 @@ use pretty_good::*;
 use yasna;
 
 #[derive(Clone, Debug)]
-pub struct HsmSigner {
+pub struct Hsm {
     yubihsm: Yubihsm,
     connector: Connector,
     session: Session,
+    authkey: u16,
 }
 
-impl HsmSigner {
-    pub fn new(connector_url: &str, authkey: u16, password: &str) -> Result<HsmSigner, Error> {
+impl Hsm {
+    pub fn new(connector_url: &str, authkey: u16, password: &str) -> Result<Hsm, Error> {
         let yubihsm = Yubihsm::new()?;
         let connector = yubihsm.connector().connect(connector_url)?;
         let session = connector.create_session_from_password(authkey, password, true)?;
 
-        Ok(HsmSigner { yubihsm, connector, session })
+        Ok(Hsm { yubihsm, connector, session, authkey })
     }
 
     fn create_digestinfo(payload: &[u8], hash_algo: HashAlgorithm) -> Result<Vec<u8>, Error> {
@@ -47,7 +48,7 @@ impl HsmSigner {
         )?;
 
         let signable_payload = sig_packet.signable_payload(payload)?;
-        let digestinfo = HsmSigner::create_digestinfo(&signable_payload, hash_algorithm)?;
+        let digestinfo = Hsm::create_digestinfo(&signable_payload, hash_algorithm)?;
 
         let signature = self.session.sign_pkcs1v1_5(signing_key, false, digestinfo)?;
         sig_packet.set_contents(Signature::Rsa(BigUint::from_bytes_be(&signature)))?;

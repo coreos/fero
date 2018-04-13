@@ -13,7 +13,7 @@ use hsm::*;
 #[derive(Clone)]
 pub struct FeroService {
     database: Configuration,
-    signer: HsmSigner,
+    signer: Hsm,
 }
 
 impl Fero for FeroService {
@@ -96,7 +96,7 @@ impl Fero for FeroService {
 }
 
 impl FeroService {
-    pub fn new(database: Configuration, signer: HsmSigner) -> FeroService {
+    pub fn new(database: Configuration, signer: Hsm) -> FeroService {
         FeroService { database, signer }
     }
 
