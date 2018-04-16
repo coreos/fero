@@ -55,4 +55,50 @@ impl Hsm {
 
         Ok(sig_packet)
     }
+
+    pub fn put_rsa_key(&self, key: &Key) -> Result<u16, Error> {
+        let (pubkey_material, privkey_material) = match key.key_material {
+            KeyMaterial::Rsa(ref pubkey_material, Some(ref privkey_material)) => {
+                (pubkey_material, privkey_material)
+            }
+            KeyMaterial::Rsa(_, None) => bail!(
+                "No private key material found. Either your PGP \
+                 packet is malformed or there's a bug in \
+                 `pretty-good`."
+            ),
+            KeyMaterial::Dsa(_, _) => bail!("DSA keys aren't supported."),
+            KeyMaterial::Elgamal(_, _) => bail!("Elgamal keys aren't supported."),
+        };
+
+        let algorithm = match pubkey_material.n.bits() {
+            1024 => bail!("YubiHSM does not support 1024-bit RSA keys."),
+            2048 => Algorithm::Rsa2048,
+            4096 => Algorithm::Rsa4096,
+            b => bail!("Unknown RSA key size: {}", b),
+        };
+
+        let objects = self.session
+            .list_objects()
+            .object_type(ObjectType::Asymmetric)
+            .execute()?;
+        let object_id = match (1..).find(|id| objects.iter().find(|obj| obj.id == *id).is_none()) {
+            Some(id) => id,
+            None => bail!("Couldn't find a suitable free object ID"),
+        };
+
+        let this_authkey = self.session
+            .get_object_info(self.authkey, ObjectType::AuthKey)?;
+
+        self.session.put_key_rsa(
+            object_id,
+            "",
+            &this_authkey.domains,
+            &[Capability::AsymmetricSignPkcs],
+            algorithm,
+            &privkey_material.p.to_bytes_be(),
+            &privkey_material.q.to_bytes_be(),
+        )?;
+
+        Ok(object_id)
+    }
 }
