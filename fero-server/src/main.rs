@@ -20,6 +20,7 @@ extern crate yasna;
 
 mod database;
 mod hsm;
+mod local;
 mod service;
 
 use std::io::{self, Read};
