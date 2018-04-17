@@ -20,16 +20,20 @@ extern crate yasna;
 
 mod database;
 mod hsm;
+mod local;
 mod service;
 
+use std::fs::File;
 use std::io::{self, Read};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 
 use failure::Error;
-use futures::Future;
 use futures::sync::oneshot;
+use futures::Future;
 use grpcio::{Environment, Server, ServerBuilder};
+use num::{bigint::ParseBigIntError, BigUint, Num};
 use structopt::StructOpt;
 
 use fero_proto::fero_grpc::create_fero;
@@ -37,12 +41,6 @@ use fero_proto::fero_grpc::create_fero;
 #[derive(StructOpt)]
 #[structopt(name = "fero-server")]
 struct Opt {
-    #[structopt(short = "a", long = "address", default_value = "0.0.0.0")]
-    /// The server's address.
-    address: String,
-    #[structopt(short = "p", long = "port", default_value = "50051")]
-    /// The server's port.
-    port: u16,
     #[structopt(short = "v", parse(from_occurrences))]
     /// Verbosity.
     verbosity: u64,
@@ -58,6 +56,49 @@ struct Opt {
     #[structopt(short = "w", long = "password")]
     /// Password for the HSM AuthKey.
     hsm_password: String,
+    #[structopt(subcommand)]
+    command: FeroServerCommand,
+}
+
+#[derive(StructOpt)]
+enum FeroServerCommand {
+    #[structopt(name = "serve")]
+    /// Start a fero server.
+    Serve(ServeCommand),
+    #[structopt(name = "add-secret")]
+    /// Enroll a secret with fero.
+    AddSecret(AddSecretCommand),
+}
+
+#[derive(StructOpt)]
+struct ServeCommand {
+    #[structopt(short = "a", long = "address", default_value = "0.0.0.0")]
+    /// The server's address.
+    address: String,
+    #[structopt(short = "p", long = "port", default_value = "50051")]
+    /// The server's port.
+    port: u16,
+}
+
+#[derive(StructOpt)]
+struct AddSecretCommand {
+    #[structopt(short = "f", long = "file", parse(from_os_str))]
+    /// File containing the GPG private key to add.
+    file: PathBuf,
+    #[structopt(short = "s", long = "subkey", parse(try_from_str = "parse_biguint"))]
+    /// Fingerprint of which subkey to add.
+    subkey: BigUint,
+    #[structopt(short = "t", long = "threshold", default_value = "100")]
+    /// Threshold to associate with the new secret.
+    threshold: i32,
+}
+
+fn parse_biguint(s: &str) -> Result<BigUint, ParseBigIntError> {
+    if s.starts_with("0x") {
+        BigUint::from_str_radix(&s[2..], 16)
+    } else {
+        BigUint::from_str_radix(s, 16)
+    }
 }
 
 fn create_server(
@@ -71,7 +112,7 @@ fn create_server(
     ServerBuilder::new(Arc::new(Environment::new(1)))
         .register_service(create_fero(service::FeroService::new(
             database::Configuration::new(database),
-            hsm::HsmSigner::new(hsm_connector, hsm_authkey, hsm_password)?,
+            hsm::Hsm::new(hsm_connector, hsm_authkey, hsm_password)?,
         )))
         .bind(address, port)
         .build()
@@ -90,24 +131,42 @@ fn run() -> Result<(), Error> {
 
     loggerv::init_with_verbosity(opts.verbosity)?;
 
-    let mut server = create_server(
-        &opts.address,
-        opts.port,
-        &opts.database,
-        &opts.hsm_connector_url,
-        opts.hsm_authkey,
-        &opts.hsm_password,
-    )?;
+    match opts.command {
+        FeroServerCommand::Serve(serve_opts) => {
+            let mut server = create_server(
+                &serve_opts.address,
+                serve_opts.port,
+                &opts.database,
+                &opts.hsm_connector_url,
+                opts.hsm_authkey,
+                &opts.hsm_password,
+            )?;
 
-    server.start();
-    let (tx, rx) = oneshot::channel();
-    thread::spawn(move || {
-        warn!("Press ENTER to exit...");
-        let _ = io::stdin().read(&mut [0]).unwrap();
-        tx.send(())
-    });
-    let _ = rx.wait();
-    server.shutdown().wait()?;
+            server.start();
+            let (tx, rx) = oneshot::channel();
+            thread::spawn(move || {
+                warn!("Press ENTER to exit...");
+                let _ = io::stdin().read(&mut [0]).unwrap();
+                tx.send(())
+            });
+            let _ = rx.wait();
+            server.shutdown().wait()?;
+        }
+        FeroServerCommand::AddSecret(enroll_opts) => {
+            let mut key_bytes = Vec::new();
+            File::open(&enroll_opts.file)?.read_to_end(&mut key_bytes)?;
+            let subkey = local::find_subkey(&key_bytes, &enroll_opts.subkey)?;
+
+            let hsm = hsm::Hsm::new(
+                &opts.hsm_connector_url,
+                opts.hsm_authkey,
+                &opts.hsm_password,
+            )?;
+            let hsm_id = hsm.put_rsa_key(&subkey)?;
+
+            local::store_key(&opts.database, hsm_id, subkey.id()?, enroll_opts.threshold)?;
+        }
+    }
 
     Ok(())
 }

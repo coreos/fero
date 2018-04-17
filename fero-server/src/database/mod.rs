@@ -82,6 +82,16 @@ impl Configuration {
             bail!("Signatures do not meet threshold");
         }
     }
+
+    pub fn insert_secret_key(&self, hsm_id: i32, key_id: i64, threshold: i32) -> Result<(), Error> {
+        let conn = SqliteConnection::establish(&self.connection_string)?;
+
+        diesel::insert_into(schema::secrets::dsl::secrets)
+            .values(&NewSecret { key_id, hsm_id, threshold })
+            .execute(&conn)
+            .map(|_| ())
+            .map_err(|e| e.into())
+    }
 }
 
 pub struct AuthenticatedConnection {
