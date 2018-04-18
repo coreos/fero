@@ -83,6 +83,16 @@ impl Configuration {
         }
     }
 
+    pub fn insert_user_key(&self, key_id: u64, key_data: &[u8]) -> Result<(), Error> {
+        let conn = SqliteConnection::establish(&self.connection_string)?;
+
+        diesel::insert_into(schema::users::dsl::users)
+            .values(&NewUserKey { key_id: key_id as i64, key_data })
+            .execute(&conn)
+            .map(|_| ())
+            .map_err(|e| e.into())
+    }
+
     pub fn insert_secret_key(&self, hsm_id: i32, key_id: i64, threshold: i32) -> Result<(), Error> {
         let conn = SqliteConnection::establish(&self.connection_string)?;
 
