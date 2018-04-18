@@ -109,24 +109,11 @@ impl AuthenticatedConnection {
             .ok_or(format_err!("Secret key deleted while in use?"))
     }
 
-    pub fn upsert_user_key(&self, key_id: u64) -> Result<UserKey, Error> {
-        if let Some(key) = schema::users::dsl::users
+    pub fn get_user_key(&self, key_id: u64) -> Result<Option<UserKey>, Error> {
+        Ok(schema::users::dsl::users
             .filter(schema::users::columns::key_id.eq(key_id as i64))
             .load::<UserKey>(&self.connection)?
-            .pop()
-        {
-            Ok(key)
-        } else {
-            diesel::insert_into(schema::users::dsl::users)
-                .values(&NewUserKey { key_id: key_id as i64 })
-                .execute(&self.connection)?;
-
-            schema::users::dsl::users
-                .filter(schema::users::columns::key_id.eq(key_id as i64))
-                .load::<UserKey>(&self.connection)?
-                .pop()
-                .ok_or(format_err!("Failed to fetch user key"))
-        }
+            .pop())
     }
 
     pub fn upsert_user_key_weight(&self, secret_key_id: u64, user: UserKey, weight: i32) -> Result<(), Error> {
