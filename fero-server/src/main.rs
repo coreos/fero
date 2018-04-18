@@ -68,6 +68,9 @@ enum FeroServerCommand {
     #[structopt(name = "add-secret")]
     /// Enroll a secret with fero.
     AddSecret(AddSecretCommand),
+    #[structopt(name = "add-user")]
+    /// Add a user to fero.
+    AddUser(AddUserCommand),
 }
 
 #[derive(StructOpt)]
@@ -91,6 +94,13 @@ struct AddSecretCommand {
     #[structopt(short = "t", long = "threshold", default_value = "100")]
     /// Threshold to associate with the new secret.
     threshold: i32,
+}
+
+#[derive(StructOpt)]
+struct AddUserCommand {
+    #[structopt(short = "f", long = "file", parse(from_os_str))]
+    /// File containing the user's GPG public key to add.
+    file: PathBuf,
 }
 
 fn parse_biguint(s: &str) -> Result<BigUint, ParseBigIntError> {
@@ -155,7 +165,7 @@ fn run() -> Result<(), Error> {
         FeroServerCommand::AddSecret(enroll_opts) => {
             let mut key_bytes = Vec::new();
             File::open(&enroll_opts.file)?.read_to_end(&mut key_bytes)?;
-            let subkey = local::find_subkey(&key_bytes, &enroll_opts.subkey)?;
+            let subkey = local::find_secret_subkey(&key_bytes, &enroll_opts.subkey)?;
 
             let hsm = hsm::Hsm::new(
                 &opts.hsm_connector_url,
@@ -165,6 +175,13 @@ fn run() -> Result<(), Error> {
             let hsm_id = hsm.put_rsa_key(&subkey)?;
 
             local::store_key(&opts.database, hsm_id, subkey.id()?, enroll_opts.threshold)?;
+        }
+        FeroServerCommand::AddUser(user_opts) => {
+            let mut key_bytes = Vec::new();
+            File::open(&user_opts.file)?.read_to_end(&mut key_bytes)?;
+            let key_id = local::find_keyid(&key_bytes)?;
+
+            local::store_user(&opts.database, key_id, &key_bytes)?;
         }
     }
 
