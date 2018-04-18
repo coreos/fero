@@ -22,14 +22,15 @@ table! {
     users (id) {
         id -> Integer,
         key_id -> BigInt,
+        key_data -> Binary,
     }
 }
 
 joinable!(user_secret_weights -> secrets (secret_id));
 joinable!(user_secret_weights -> users (user_id));
 
-//allow_tables_to_appear_in_same_query!(
-//    secrets,
-//    user_secret_weights,
-//    users,
-//);
+allow_tables_to_appear_in_same_query!(
+    secrets,
+    user_secret_weights,
+    users,
+);
