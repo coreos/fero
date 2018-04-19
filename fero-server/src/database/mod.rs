@@ -64,11 +64,15 @@ impl Configuration {
             for signature in verification.signatures() {
                 // It seems gpgme is not filling in the .key() field here, so we retrieve it from
                 // gpgme via the fingerprint of the signature.
-                if let Ok(signing_key) = gpg.find_key(signature.fingerprint().unwrap()) {
-                    ids.insert(u64::from_str_radix(signing_key.id().unwrap(), 16)? as i64);
+                let fingerprint = signature
+                    .fingerprint()
+                    .map_err(|_| format_err!("Failed to get signature fingerprint"))?;
+                if let Ok(signing_key) = gpg.find_key(fingerprint) {
+                    let signing_key_id = signing_key.id().map_err(|_| {
+                        format_err!("Failed to get signing key's ID from fingerprint")
+                    })?;
+                    ids.insert(u64::from_str_radix(signing_key_id, 16)? as i64);
                 }
-                // TODO
-                //ids.insert(signature.key().unwrap().primary_key().unwrap().id().chain_err(|| "Failed to read key id")?);
             }
         }
 
