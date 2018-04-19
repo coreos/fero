@@ -16,6 +16,7 @@ extern crate pretty_good;
 extern crate protobuf;
 #[macro_use]
 extern crate structopt;
+extern crate tempfile;
 extern crate yasna;
 
 mod database;

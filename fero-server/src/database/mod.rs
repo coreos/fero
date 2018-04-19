@@ -2,12 +2,14 @@ mod models;
 mod schema;
 
 use std::collections::HashSet;
+use std::os::unix::ffi::OsStrExt;
 
 use diesel::{self, Connection};
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use failure::Error;
 use gpgme::{Context, Protocol};
+use tempfile::TempDir;
 
 use fero_proto::fero::*;
 use self::models::*;
@@ -35,7 +37,20 @@ impl Configuration {
             .pop()
             .ok_or(format_err!("No secret key found ({})", ident.secretKeyId))?;
 
-        let mut gpg = Context::from_protocol(Protocol::OpenPgp).unwrap();
+        let applicable_users = schema::users::table
+            .select(schema::users::all_columns)
+            .inner_join(schema::user_secret_weights::table)
+            .filter(schema::user_secret_weights::columns::secret_id.eq(secret.id))
+            .load::<UserKey>(&conn)?;
+
+        let mut gpg = Context::from_protocol(Protocol::OpenPgp)?;
+        let gpg_homedir = TempDir::new()?;
+        gpg.set_engine_home_dir(gpg_homedir.path().as_os_str().as_bytes())?;
+
+        for user in applicable_users {
+            gpg.import(user.key_data)?;
+        }
+
         let mut ids = HashSet::new();
         for signature in &ident.signatures {
             let mut data = Vec::new();
@@ -49,8 +64,9 @@ impl Configuration {
             for signature in verification.signatures() {
                 // It seems gpgme is not filling in the .key() field here, so we retrieve it from
                 // gpgme via the fingerprint of the signature.
-                let signing_key = gpg.find_key(signature.fingerprint().unwrap()).unwrap();
-                ids.insert(u64::from_str_radix(signing_key.id().unwrap(), 16)? as i64);
+                if let Ok(signing_key) = gpg.find_key(signature.fingerprint().unwrap()) {
+                    ids.insert(u64::from_str_radix(signing_key.id().unwrap(), 16)? as i64);
+                }
                 // TODO
                 //ids.insert(signature.key().unwrap().primary_key().unwrap().id().chain_err(|| "Failed to read key id")?);
             }
