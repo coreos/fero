@@ -16,6 +16,7 @@ num = "0.1.40"
 pretty-good = "0.2.2"
 protobuf = "1.4"
 structopt = "0.2"
+tempfile = "3"
 yasna = "0.1.3"
 
 [dependencies.fero-proto]

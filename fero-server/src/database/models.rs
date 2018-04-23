@@ -12,6 +12,7 @@ pub struct SecretKey {
 pub struct UserKey {
     pub id: i32,
     pub key_id: i64,
+    pub key_data: Vec<u8>,
 }
 
 #[derive(Queryable)]
@@ -32,8 +33,9 @@ pub struct NewSecret {
 
 #[derive(Insertable)]
 #[table_name = "users"]
-pub struct NewUserKey {
+pub struct NewUserKey<'a> {
     pub key_id: i64,
+    pub key_data: &'a [u8],
 }
 
 #[derive(Insertable)]

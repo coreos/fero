@@ -1,0 +1,2 @@
+ALTER TABLE users
+    ADD COLUMN key_data BLOB NOT NULL DEFAULT X'00';
