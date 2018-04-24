@@ -64,32 +64,28 @@ impl Configuration {
             for signature in verification.signatures() {
                 // It seems gpgme is not filling in the .key() field here, so we retrieve it from
                 // gpgme via the fingerprint of the signature.
-                if let Ok(signing_key) = gpg.find_key(signature.fingerprint().unwrap()) {
-                    ids.insert(u64::from_str_radix(signing_key.id().unwrap(), 16)? as i64);
+                let fingerprint = signature
+                    .fingerprint()
+                    .map_err(|_| format_err!("Failed to get signature fingerprint"))?;
+                if let Ok(signing_key) = gpg.find_key(fingerprint) {
+                    let signing_key_id = signing_key.id().map_err(|_| {
+                        format_err!("Failed to get signing key's ID from fingerprint")
+                    })?;
+                    ids.insert(u64::from_str_radix(signing_key_id, 16)? as i64);
                 }
-                // TODO
-                //ids.insert(signature.key().unwrap().primary_key().unwrap().id().chain_err(|| "Failed to read key id")?);
             }
         }
 
         let mut weight = 0;
         for id in ids {
-            // TODO use JOIN
-            if let Some(user) = schema::users::dsl::users
+            weight += schema::user_secret_weights::table
+                .select(schema::user_secret_weights::columns::weight)
+                .inner_join(schema::users::table)
+                .filter(schema::user_secret_weights::columns::secret_id.eq(secret.id))
                 .filter(schema::users::columns::key_id.eq(id))
-                .load::<UserKey>(&conn)?
-                .pop() {
-                weight += schema::user_secret_weights::dsl::user_secret_weights
-                    .filter(schema::user_secret_weights::columns::secret_id.eq(
-                        secret.id,
-                    ))
-                    .filter(schema::user_secret_weights::columns::user_id.eq(user.id))
-                    .load::<UserKeyWeight>(&conn)?
-                    .pop()
-                    .map(|w| w.weight)
-                    .unwrap_or(0)
-            }
-
+                .load(&conn)?
+                .pop()
+                .unwrap_or(0);
         }
 
         if weight >= secret.threshold {
