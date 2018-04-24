@@ -26,6 +26,7 @@ mod service;
 
 use std::fs::File;
 use std::io::{self, Read};
+use std::num::ParseIntError;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
@@ -72,6 +73,9 @@ enum FeroServerCommand {
     #[structopt(name = "add-user")]
     /// Add a user to fero.
     AddUser(AddUserCommand),
+    #[structopt(name = "set-user-weight")]
+    /// Set a user's weight for a particular secret.
+    SetUserWeight(SetUserWeightCommand),
 }
 
 #[derive(StructOpt)]
@@ -102,6 +106,27 @@ struct AddUserCommand {
     #[structopt(short = "f", long = "file", parse(from_os_str))]
     /// File containing the user's GPG public key to add.
     file: PathBuf,
+}
+
+#[derive(StructOpt)]
+struct SetUserWeightCommand {
+    #[structopt(short = "u", long = "user", parse(try_from_str = "parse_hex"))]
+    /// PGP key ID for the user.
+    user: u64,
+    #[structopt(short = "s", long = "secret", parse(try_from_str = "parse_hex"))]
+    /// PGP key ID for the secret.
+    secret: u64,
+    #[structopt(short = "e", long = "weight")]
+    /// New weight.
+    weight: i32,
+}
+
+fn parse_hex(s: &str) -> Result<u64, ParseIntError> {
+    if s.starts_with("0x") {
+        u64::from_str_radix(&s[2..], 16)
+    } else {
+        u64::from_str_radix(s, 16)
+    }
 }
 
 fn parse_biguint(s: &str) -> Result<BigUint, ParseBigIntError> {
@@ -183,6 +208,14 @@ fn run() -> Result<(), Error> {
             let key_id = local::find_keyid(&key_bytes)?;
 
             local::store_user(&opts.database, key_id, &key_bytes)?;
+        }
+        FeroServerCommand::SetUserWeight(weight_opts) => {
+            local::set_user_weight(
+                &opts.database,
+                weight_opts.user,
+                weight_opts.secret,
+                weight_opts.weight,
+            )?;
         }
     }
 
