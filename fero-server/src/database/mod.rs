@@ -13,6 +13,7 @@ use tempfile::TempDir;
 
 use fero_proto::fero::*;
 use self::models::*;
+use super::local::LocalIdentification;
 
 #[derive(Clone)]
 pub struct Configuration {
@@ -97,6 +98,16 @@ impl Configuration {
         } else {
             bail!("Signatures do not meet threshold");
         }
+    }
+
+    pub(crate) fn local_authenticate(
+        &self,
+        local_ident: LocalIdentification,
+    ) -> Result<AuthenticatedConnection, Error> {
+        Ok(AuthenticatedConnection {
+            secret_key: local_ident.secret_key,
+            connection: SqliteConnection::establish(&self.connection_string)?,
+        })
     }
 
     pub fn insert_user_key(&self, key_id: u64, key_data: &[u8]) -> Result<(), Error> {

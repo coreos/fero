@@ -4,6 +4,11 @@ use pretty_good::{Key, Packet};
 
 use database;
 
+pub(crate) struct LocalIdentification {
+    pub(crate) secret_key: u64,
+    _priv: (),
+}
+
 pub(crate) fn find_secret_subkey(packets_bytes: &[u8], subkey_id: &BigUint) -> Result<Key, Error> {
     let packets = Packet::all_from_bytes(&packets_bytes)?;
     let mut subkeys = packets.into_iter().filter_map(|packet| match packet {
