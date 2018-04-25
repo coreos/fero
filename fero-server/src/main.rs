@@ -15,6 +15,7 @@
 extern crate byteorder;
 #[macro_use]
 extern crate diesel;
+extern crate diesel_migrations;
 #[macro_use]
 extern crate failure;
 extern crate fero_proto;
@@ -28,6 +29,8 @@ extern crate loggerv;
 extern crate num;
 extern crate pretty_good;
 extern crate protobuf;
+extern crate rpassword;
+extern crate secstr;
 #[macro_use]
 extern crate structopt;
 extern crate tempfile;
@@ -50,6 +53,7 @@ use futures::sync::oneshot;
 use futures::Future;
 use grpcio::{Environment, Server, ServerBuilder};
 use num::{bigint::ParseBigIntError, BigUint, Num};
+use secstr::SecStr;
 use structopt::StructOpt;
 
 use fero_proto::fero_grpc::create_fero;
@@ -66,12 +70,6 @@ struct Opt {
     #[structopt(short = "c", long = "connector-url", default_value = "http://127.0.0.1:12345")]
     /// URL for the HSM connector.
     hsm_connector_url: String,
-    #[structopt(short = "k", long = "authkey")]
-    /// YubiHSM2 AuthKey to use.
-    hsm_authkey: u16,
-    #[structopt(short = "w", long = "password")]
-    /// Password for the HSM AuthKey.
-    hsm_password: String,
     #[structopt(subcommand)]
     command: FeroServerCommand,
 }
@@ -90,6 +88,9 @@ enum FeroServerCommand {
     #[structopt(name = "set-user-weight")]
     /// Set a user's weight for a particular secret.
     SetUserWeight(SetUserWeightCommand),
+    #[structopt(name = "provision")]
+    /// Perform first-time initialization to set up a fero server.
+    Provision(ProvisionCommand),
 }
 
 #[derive(StructOpt)]
@@ -100,6 +101,12 @@ struct ServeCommand {
     #[structopt(short = "p", long = "port", default_value = "50051")]
     /// The server's port.
     port: u16,
+    #[structopt(short = "k", long = "authkey")]
+    /// YubiHSM2 AuthKey to use.
+    hsm_authkey: u16,
+    #[structopt(short = "w", long = "password")]
+    /// Password for the HSM AuthKey.
+    hsm_password: String,
 }
 
 #[derive(StructOpt)]
@@ -113,6 +120,12 @@ struct AddSecretCommand {
     #[structopt(short = "t", long = "threshold", default_value = "100")]
     /// Threshold to associate with the new secret.
     threshold: i32,
+    #[structopt(short = "k", long = "authkey")]
+    /// YubiHSM2 AuthKey to use.
+    hsm_authkey: u16,
+    #[structopt(short = "w", long = "password")]
+    /// Password for the HSM AuthKey.
+    hsm_password: String,
 }
 
 #[derive(StructOpt)]
@@ -133,6 +146,13 @@ struct SetUserWeightCommand {
     #[structopt(short = "e", long = "weight")]
     /// New weight.
     weight: i32,
+}
+
+#[derive(StructOpt)]
+struct ProvisionCommand {
+    #[structopt(short = "y", long = "yes")]
+    /// Confirm that you want to freshly provision the database and HSM.
+    confirm: bool,
 }
 
 fn parse_hex(s: &str) -> Result<u64, ParseIntError> {
@@ -188,8 +208,8 @@ fn run() -> Result<(), Error> {
                 serve_opts.port,
                 &opts.database,
                 &opts.hsm_connector_url,
-                opts.hsm_authkey,
-                &opts.hsm_password,
+                serve_opts.hsm_authkey,
+                &serve_opts.hsm_password,
             )?;
 
             server.start();
@@ -209,8 +229,8 @@ fn run() -> Result<(), Error> {
 
             let hsm = hsm::Hsm::new(
                 &opts.hsm_connector_url,
-                opts.hsm_authkey,
-                &opts.hsm_password,
+                enroll_opts.hsm_authkey,
+                &enroll_opts.hsm_password,
             )?;
             let hsm_id = hsm.put_rsa_key(&subkey)?;
 
@@ -229,6 +249,39 @@ fn run() -> Result<(), Error> {
                 weight_opts.user,
                 weight_opts.secret,
                 weight_opts.weight,
+            )?;
+        }
+        FeroServerCommand::Provision(provision_opts) => {
+            if !provision_opts.confirm {
+                error!("Provisioning the HSM is destructive! Pass the `-y` option to fero-server to confirm you want to do this.");
+                return Ok(());
+            }
+
+            let admin_key_password = SecStr::from(rpassword::prompt_password_stdout(
+                "Password for new administrative HSM AuthKey: ",
+            )?);
+            let admin_password_confirm = SecStr::from(rpassword::prompt_password_stdout(
+                "Confirm administrative AuthKey password: ",
+            )?);
+            if admin_key_password != admin_password_confirm {
+                bail!("Passwords do not match.");
+            }
+
+            let app_key_password = SecStr::from(rpassword::prompt_password_stdout(
+                "Password for new application HSM AuthKey: ",
+            )?);
+            let app_password_confirm = SecStr::from(rpassword::prompt_password_stdout(
+                "Confirm application AuthKey password: ",
+            )?);
+            if app_key_password != app_password_confirm {
+                bail!("Passwords do not match.");
+            }
+
+            local::provision(
+                &opts.database,
+                &opts.hsm_connector_url,
+                admin_key_password,
+                app_key_password,
             )?;
         }
     }

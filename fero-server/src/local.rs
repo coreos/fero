@@ -12,11 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fs::File;
+use std::str;
+use std::thread;
+use std::time::{Duration, Instant};
+
+use diesel::{sqlite::SqliteConnection, Connection};
+use diesel_migrations::run_pending_migrations;
 use failure::Error;
+use libyubihsm::{Capability, ObjectType, ReturnCode, Yubihsm};
 use num::BigUint;
 use pretty_good::{Key, Packet};
+use secstr::SecStr;
 
 use database;
+
+const DEFAULT_HSM_AUTHKEY_ID: u16 = 1;
+const DEFAULT_HSM_PASSWORD: &'static str = "password";
 
 pub(crate) struct LocalIdentification {
     pub(crate) secret_key: u64,
@@ -98,4 +110,80 @@ pub(crate) fn set_user_weight(
         .ok_or(format_err!("No such user"))?;
 
     authed_database.upsert_user_key_weight(secret_key, user_key_obj, weight)
+}
+
+pub(crate) fn provision(
+    database_url: &str,
+    hsm_connector_url: &str,
+    admin_authkey_password: SecStr,
+    app_authkey_password: SecStr,
+) -> Result<(), Error> {
+    File::create(database_url)?;
+    let conn = SqliteConnection::establish(database_url)?;
+    run_pending_migrations(&conn)?;
+    info!("Created and migrated database.");
+
+    let yubihsm = Yubihsm::new()?;
+    let connector = yubihsm.connector().connect(hsm_connector_url)?;
+    let session = connector.create_session_from_password(
+        DEFAULT_HSM_AUTHKEY_ID,
+        DEFAULT_HSM_PASSWORD,
+        true
+    )?;
+    // As soon as the YubiHSM tries to reset, it reboots and vanishes out from underneath the
+    // connector, which dutifully reports this as a NetError. If we receive a NetError here, ignore
+    // it.
+    if let Err(e) = session.reset() {
+        match e.downcast::<ReturnCode>() {
+            Ok(ReturnCode::NetError) => {}
+            Ok(other) => bail!(other),
+            Err(cast_e) => bail!(cast_e),
+        }
+    };
+
+    // It takes the device a bit to reboot, so retry the connection until it succeeds.
+    let mut backoff_ms = 15;
+    let reconnect_start = Instant::now();
+    let connector = loop {
+        match yubihsm.connector().connect(hsm_connector_url) {
+            Ok(connector) => break Ok(connector),
+            Err(e) => {
+                if reconnect_start.elapsed().as_secs() > 5 {
+                    break Err(e);
+                }
+                thread::sleep(Duration::from_millis(backoff_ms));
+                backoff_ms *= 2;
+            }
+        };
+    }?;
+
+    let session = connector.create_session_from_password(1, "password", true)?;
+    let default_authkey = session.get_object_info(1, ObjectType::AuthKey)?;
+    session.create_authkey(
+        2,
+        "fero_admin",
+        &default_authkey.domains,
+        &default_authkey.capabilities,
+        &default_authkey.delegated_capabilities,
+        str::from_utf8(&admin_authkey_password.unsecure())?,
+    )?;
+    info!("Created admin AuthKey with object ID 2.");
+    session.create_authkey(
+        3,
+        "fero_app",
+        &default_authkey.domains,
+        &[
+            Capability::PutAsymmetric,
+            Capability::GetOption,
+            Capability::PutOption,
+            Capability::Audit,
+        ],
+        &[Capability::AsymmetricSignPkcs],
+        str::from_utf8(&app_authkey_password.unsecure())?,
+    )?;
+    info!("Created application AuthKey with object ID 3.");
+    session.delete_object(1, ObjectType::AuthKey)?;
+    info!("Deleted default AuthKey.");
+
+    Ok(())
 }
