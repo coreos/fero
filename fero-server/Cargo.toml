@@ -26,4 +26,4 @@ path = "../fero-proto/"
 version = "0.7"
 
 [dependencies.libyubihsm]
-version = "0.2"
+version = "0.2.1"

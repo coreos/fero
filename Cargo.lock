@@ -298,7 +298,7 @@ dependencies = [
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "gpgme 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "grpcio 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "libyubihsm 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libyubihsm 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "loggerv 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "num 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -465,7 +465,7 @@ dependencies = [
 
 [[package]]
 name = "libyubihsm"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bindgen 0.32.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1039,7 +1039,7 @@ dependencies = [
 "checksum libgpg-error-sys 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "4cec2d275bbc13a70bac0feb7f275c8c595f7e2f9254d0fc44fb422848e1dffa"
 "checksum libloading 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)" = "fd38073de8f7965d0c17d30546d4bb6da311ab428d1c7a3fc71dff7f9d4979b9"
 "checksum libsqlite3-sys 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0e9eb7b8e152b6a01be6a4a2917248381875758250dc3df5d46caf9250341dda"
-"checksum libyubihsm 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "fdcbbe043cee350d654e3bc0f3eaf1427ad5969f774f71baa16725b77ca2af50"
+"checksum libyubihsm 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "bd12302ea3d22766a7d8073d53f56021ca79bda1fc6c2fae143025b96805dfb8"
 "checksum log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)" = "e19e8d5c34a3e0e2223db8e060f9e8264aeeb5c5fc64a4ee9965c062211c024b"
 "checksum log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "89f010e843f2b1a31dbd316b3b8d443758bc634bed37aabade59c686d644e0a2"
 "checksum loggerv 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)" = "ba6b0664956d197c6e0223870c1cd1ec4117aea282b4c0bd5ab01119d31d708d"
