@@ -40,6 +40,8 @@ mod database;
 mod hsm;
 mod local;
 mod service;
+#[cfg(test)]
+mod test;
 
 use std::fs::File;
 use std::io::{self, Read};
