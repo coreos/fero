@@ -10,6 +10,7 @@ diesel = { version = "1", features = ["sqlite"] }
 diesel_migrations = "1"
 failure = "0.1"
 futures = "0.1"
+gag = "0.1"
 grpcio = "0.2"
 log = "0.4"
 loggerv = "0.7"

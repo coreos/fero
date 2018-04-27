@@ -20,6 +20,7 @@ extern crate diesel_migrations;
 extern crate failure;
 extern crate fero_proto;
 extern crate futures;
+extern crate gag;
 extern crate gpgme;
 extern crate grpcio;
 extern crate libyubihsm;

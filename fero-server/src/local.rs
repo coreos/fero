@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fs::File;
+use std::mem::drop;
 use std::str;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -20,6 +21,7 @@ use std::time::{Duration, Instant};
 use diesel::{sqlite::SqliteConnection, Connection};
 use diesel_migrations::run_pending_migrations;
 use failure::Error;
+use gag::Gag;
 use libyubihsm::{Capability, ObjectType, ReturnCode, Yubihsm};
 use num::BigUint;
 use pretty_good::{Key, Packet};
@@ -120,7 +122,14 @@ pub(crate) fn provision(
 ) -> Result<(), Error> {
     File::create(database_url)?;
     let conn = SqliteConnection::establish(database_url)?;
+
+    // Diesel likes to shout about each migration as it performs them. This is espcially obnoxious
+    // in `cargo test`, since a new database is provisioned for each test, so use `Gag` here to
+    // shut Diesel up.
+    let gag = Gag::stdout()?;
     run_pending_migrations(&conn)?;
+    drop(gag);
+
     info!("Created and migrated database.");
 
     let yubihsm = Yubihsm::new()?;
