@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::fs::File;
+use std::io::Read;
 use std::mem::drop;
+use std::path::Path;
 use std::str;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -28,6 +30,7 @@ use pretty_good::{Key, Packet};
 use secstr::SecStr;
 
 use database;
+use hsm::Hsm;
 
 const DEFAULT_HSM_AUTHKEY_ID: u16 = 1;
 const DEFAULT_HSM_PASSWORD: &'static str = "password";
@@ -88,6 +91,22 @@ pub(crate) fn store_key(
 ) -> Result<(), Error> {
     let database = database::Configuration::new(database_url);
     database.insert_secret_key(i32::from(hsm_id), key_id as i64, threshold)
+}
+
+pub(crate) fn import_secret(
+    hsm: &Hsm,
+    filename: &Path,
+    subkey: &BigUint,
+    database: &str,
+    threshold: i32,
+) -> Result<(), Error> {
+    let mut key_bytes = Vec::new();
+    File::open(filename)?.read_to_end(&mut key_bytes)?;
+    let subkey = find_secret_subkey(&key_bytes, subkey)?;
+
+    let hsm_id = hsm.put_rsa_key(&subkey)?;
+
+    store_key(database, hsm_id, subkey.id()?, threshold)
 }
 
 pub(crate) fn store_user(database_url: &str, key_id: u64, key: &[u8]) -> Result<(), Error> {
