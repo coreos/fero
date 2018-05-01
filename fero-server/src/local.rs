@@ -186,6 +186,7 @@ pub(crate) fn provision(
             Capability::GetOption,
             Capability::PutOption,
             Capability::Audit,
+            Capability::AsymmetricSignPkcs,
         ],
         &[Capability::AsymmetricSignPkcs],
         str::from_utf8(&app_authkey_password.unsecure())?,
