@@ -172,3 +172,37 @@ fn provision() {
 
     assert!(try_reset_device(), "Couldn't reset device after testing!");
 }
+
+#[test]
+fn sign() {
+    let env = setup_environment(1, 1, 0).unwrap();
+
+    let artifact = "Test payload. This should be signed successfully.".as_bytes();
+
+    let mut gpg = Context::from_protocol(Protocol::OpenPgp).unwrap();
+    gpg.set_engine_home_dir(env.directory.path().as_os_str().as_bytes())
+        .unwrap();
+
+    let mut signature = Vec::new();
+    let signer = gpg.find_key(format!("{:x}", env.valid_users[0])).unwrap();
+    gpg.add_signer(&signer).unwrap();
+    gpg.sign_normal(artifact, &mut signature).unwrap();
+
+    let mut ident = Identification::new();
+    ident.set_secretKeyId(env.secret_id);
+    ident.set_signatures(RepeatedField::from_vec(vec![signature]));
+
+    let output = env.fero_service.sign_payload(&ident, artifact).unwrap();
+
+    let signatures = gpg.verify_detached(&output, artifact).unwrap();
+    let signature = signatures.signatures().next().unwrap();
+    assert_eq!(
+        signature.fingerprint_raw().unwrap(),
+        gpg.find_key(format!("{:x}", env.secret_id))
+            .unwrap()
+            .fingerprint_raw()
+            .unwrap()
+    );
+
+    assert!(try_reset_device(), "Couldn't reset device after testing!");
+}
