@@ -148,7 +148,7 @@ impl FeroService {
         }
     }
 
-    fn sign_payload(
+    pub(crate) fn sign_payload(
         &self,
         ident: &Identification,
         payload: &[u8],

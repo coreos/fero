@@ -13,6 +13,9 @@
 // limitations under the License.
 
 use std::fs::File;
+use std::io::Read;
+use std::mem::drop;
+use std::path::Path;
 use std::str;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -20,12 +23,14 @@ use std::time::{Duration, Instant};
 use diesel::{sqlite::SqliteConnection, Connection};
 use diesel_migrations::run_pending_migrations;
 use failure::Error;
+use gag::Gag;
 use libyubihsm::{Capability, ObjectType, ReturnCode, Yubihsm};
 use num::BigUint;
 use pretty_good::{Key, Packet};
 use secstr::SecStr;
 
 use database;
+use hsm::Hsm;
 
 const DEFAULT_HSM_AUTHKEY_ID: u16 = 1;
 const DEFAULT_HSM_PASSWORD: &'static str = "password";
@@ -88,6 +93,22 @@ pub(crate) fn store_key(
     database.insert_secret_key(i32::from(hsm_id), key_id as i64, threshold)
 }
 
+pub(crate) fn import_secret(
+    hsm: &Hsm,
+    filename: &Path,
+    subkey: &BigUint,
+    database: &str,
+    threshold: i32,
+) -> Result<(), Error> {
+    let mut key_bytes = Vec::new();
+    File::open(filename)?.read_to_end(&mut key_bytes)?;
+    let subkey = find_secret_subkey(&key_bytes, subkey)?;
+
+    let hsm_id = hsm.put_rsa_key(&subkey)?;
+
+    store_key(database, hsm_id, subkey.id()?, threshold)
+}
+
 pub(crate) fn store_user(database_url: &str, key_id: u64, key: &[u8]) -> Result<(), Error> {
     let database = database::Configuration::new(database_url);
     database.insert_user_key(key_id, key)
@@ -120,7 +141,14 @@ pub(crate) fn provision(
 ) -> Result<(), Error> {
     File::create(database_url)?;
     let conn = SqliteConnection::establish(database_url)?;
+
+    // Diesel likes to shout about each migration as it performs them. This is espcially obnoxious
+    // in `cargo test`, since a new database is provisioned for each test, so use `Gag` here to
+    // shut Diesel up.
+    let gag = Gag::stdout()?;
     run_pending_migrations(&conn)?;
+    drop(gag);
+
     info!("Created and migrated database.");
 
     let yubihsm = Yubihsm::new()?;
@@ -177,6 +205,7 @@ pub(crate) fn provision(
             Capability::GetOption,
             Capability::PutOption,
             Capability::Audit,
+            Capability::AsymmetricSignPkcs,
         ],
         &[Capability::AsymmetricSignPkcs],
         str::from_utf8(&app_authkey_password.unsecure())?,

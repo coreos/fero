@@ -20,6 +20,7 @@ extern crate diesel_migrations;
 extern crate failure;
 extern crate fero_proto;
 extern crate futures;
+extern crate gag;
 extern crate gpgme;
 extern crate grpcio;
 extern crate libyubihsm;
@@ -40,6 +41,8 @@ mod database;
 mod hsm;
 mod local;
 mod service;
+#[cfg(test)]
+mod test;
 
 use std::fs::File;
 use std::io::{self, Read};
@@ -223,18 +226,19 @@ fn run() -> Result<(), Error> {
             server.shutdown().wait()?;
         }
         FeroServerCommand::AddSecret(enroll_opts) => {
-            let mut key_bytes = Vec::new();
-            File::open(&enroll_opts.file)?.read_to_end(&mut key_bytes)?;
-            let subkey = local::find_secret_subkey(&key_bytes, &enroll_opts.subkey)?;
-
             let hsm = hsm::Hsm::new(
                 &opts.hsm_connector_url,
                 enroll_opts.hsm_authkey,
                 &enroll_opts.hsm_password,
             )?;
-            let hsm_id = hsm.put_rsa_key(&subkey)?;
 
-            local::store_key(&opts.database, hsm_id, subkey.id()?, enroll_opts.threshold)?;
+            local::import_secret(
+                &hsm,
+                &enroll_opts.file,
+                &enroll_opts.subkey,
+                &opts.database,
+                enroll_opts.threshold,
+            )?;
         }
         FeroServerCommand::AddUser(user_opts) => {
             let mut key_bytes = Vec::new();
