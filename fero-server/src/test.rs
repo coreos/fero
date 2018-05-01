@@ -230,3 +230,17 @@ fn dont_sign_invalid_user() {
 
     assert!(try_reset_device(), "Couldn't reset device after testing!");
 }
+
+#[test]
+fn dont_sign_no_signatures() {
+    let env = setup_environment(1, 0, 0).unwrap();
+
+    let artifact = "Test payload. This should NOT be signed successfully.".as_bytes();
+
+    let mut ident = Identification::new();
+    ident.set_secretKeyId(env.secret_id);
+
+    assert!(env.fero_service.sign_payload(&ident, artifact).is_err());
+
+    assert!(try_reset_device(), "Couldn't reset device after testing!");
+}
