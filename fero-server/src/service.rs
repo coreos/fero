@@ -17,6 +17,7 @@ use failure::Error;
 use futures::Future;
 use grpcio::{self, RpcContext, RpcStatus, UnarySink};
 use pretty_good::{HashAlgorithm, Packet};
+use protobuf::{Message, repeated::RepeatedField, well_known_types::Timestamp};
 
 use database::Configuration;
 use fero_proto::fero::*;
@@ -138,6 +139,20 @@ impl Fero for FeroService {
     }
 
     fn get_logs(&self, ctx: RpcContext, req: LogRequest, sink: UnarySink<LogResponse>) {
+        match self.get_logs(req.get_minIndex()) {
+            Ok(logs) => {
+                let mut response = LogResponse::new();
+                response.set_logs(RepeatedField::from_vec(logs));
+
+                ctx.spawn(sink.success(response).map_err(move |err| {
+                    error!("failed to reply {:?}: {:?}", req, err)
+                }))
+            }
+            Err(err) => ctx.spawn(sink.fail(RpcStatus {
+                status: grpcio::RpcStatusCode::Aborted,
+                details: Some(format!("Failed to retrive logs: {}", err)),
+            }).map_err(move |err| error!("failed to reply {:?}: {:?}", req, err))),
+        }
     }
 }
 
@@ -195,5 +210,61 @@ impl FeroService {
         let packet_bytes = pgp_packet.to_bytes()?;
 
         Ok(Vec::from(packet_bytes))
+    }
+
+    fn get_logs(&self, min_index: i32) -> Result<Vec<LogEntry>, Error> {
+        self.database
+            .fero_logs_since(min_index)?
+            .iter()
+            .map(|fero_db_log| -> Result<_, Error> {
+                let hsm_logs = self.database
+                    .associated_hsm_logs(fero_db_log)?
+                    .iter()
+                    .map(|hsm_db_log| {
+                        let mut hsm_log = HsmLog::new();
+
+                        hsm_log.set_id(hsm_db_log.hsm_index as u32);
+                        hsm_log.set_command(hsm_db_log.command as u32);
+                        hsm_log.set_data_length(hsm_db_log.data_length as u32);
+                        hsm_log.set_session_key(hsm_db_log.session_key as u32);
+                        hsm_log.set_target_key(hsm_db_log.target_key as u32);
+                        hsm_log.set_second_key(hsm_db_log.second_key as u32);
+                        hsm_log.set_result(hsm_db_log.result as u32);
+                        hsm_log.set_systick(hsm_db_log.systick as u32);
+                        hsm_log.set_hash(hsm_db_log.hash.clone());
+
+                        hsm_log
+                    })
+                    .collect::<Vec<_>>();
+
+                let mut entry = LogEntry::new();
+
+                entry.set_id(fero_db_log.id);
+                entry.set_operation_type(match fero_db_log.request_type {
+                    OperationType::Sign => LogEntry_OperationType::SIGN,
+                    OperationType::Threshold => LogEntry_OperationType::THRESHOLD,
+                    OperationType::Weight => LogEntry_OperationType::WEIGHT,
+                    OperationType::AddSecret => LogEntry_OperationType::ADD_SECRET,
+                    OperationType::AddUser => LogEntry_OperationType::ADD_USER,
+                });
+                let mut timestamp = Timestamp::new();
+                timestamp.set_seconds(fero_db_log.timestamp.timestamp());
+                timestamp.set_nanos(fero_db_log.timestamp.timestamp_subsec_nanos() as i32);
+                entry.set_timestamp(timestamp);
+                entry.set_result(match fero_db_log.result {
+                    OperationResult::Success => LogEntry_OperationResult::SUCCESS,
+                    OperationResult::Failure => LogEntry_OperationResult::FAILURE,
+                });
+                if let Some(ref ident_bytes) = fero_db_log.identification {
+                    let mut ident = Identification::new();
+                    ident.merge_from_bytes(ident_bytes)?;
+                    entry.set_ident(ident);
+                }
+                entry.set_hsm_logs(RepeatedField::from_vec(hsm_logs));
+                entry.set_hash(fero_db_log.hash.clone());
+
+                Ok(entry)
+            })
+            .collect::<Result<Vec<_>, Error>>()
     }
 }
