@@ -107,6 +107,9 @@ impl Fero for FeroService {
             }
         }
     }
+
+    fn get_logs(&self, ctx: RpcContext, req: LogRequest, sink: UnarySink<LogResponse>) {
+    }
 }
 
 impl FeroService {

@@ -77,4 +77,11 @@ impl Fero for FeroBastion {
         WeightResponse,
         "Failed to update user key weight"
     );
+
+    bastion_call!(
+        get_logs,
+        LogRequest,
+        LogResponse,
+        "Failed to get audit logs"
+    );
 }
