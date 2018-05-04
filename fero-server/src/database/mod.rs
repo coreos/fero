@@ -25,7 +25,7 @@ use failure::Error;
 use gpgme::{Context, Protocol, SignatureSummary};
 use tempfile::TempDir;
 
-use fero_proto::fero::*;
+use fero_proto::fero::Identification;
 use self::models::*;
 use super::local::LocalIdentification;
 
@@ -145,6 +145,27 @@ impl Configuration {
             .values(&NewSecret { key_id, hsm_id, threshold })
             .execute(&conn)
             .map(|_| ())
+            .map_err(|e| e.into())
+    }
+
+    pub fn fero_logs_since(&self, idx: i32) -> Result<Vec<FeroLog>, Error> {
+        let conn = SqliteConnection::establish(&self.connection_string)?;
+
+        schema::fero_logs::dsl::fero_logs
+            .order(schema::fero_logs::columns::id.asc())
+            .filter(schema::fero_logs::columns::id.gt(idx))
+            .load::<FeroLog>(&conn)
+            .map_err(|e| e.into())
+    }
+
+    pub fn associated_hsm_logs(&self, fero_log: &FeroLog) -> Result<Vec<HsmLog>, Error> {
+        let conn = SqliteConnection::establish(&self.connection_string)?;
+
+        schema::hsm_logs::dsl::hsm_logs
+            .order(schema::hsm_logs::columns::hsm_index.asc())
+            .filter(schema::hsm_logs::columns::hsm_index.gt(fero_log.hsm_index_start))
+            .filter(schema::hsm_logs::columns::hsm_index.le(fero_log.hsm_index_end))
+            .load::<HsmLog>(&conn)
             .map_err(|e| e.into())
     }
 
