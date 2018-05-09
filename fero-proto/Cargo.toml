@@ -5,6 +5,8 @@ authors = ["Alex Crawford <alex.crawford@coreos.com>"]
 workspace = ".."
 
 [dependencies]
+diesel = { version = "1", features = ["sqlite", "chrono"] }
+diesel-derive-enum = { version = "0.4", features = ["sqlite"] }
 futures = "0.1"
 grpcio = "0.2"
 protobuf = "1.4"
