@@ -5,11 +5,15 @@ authors = ["Alex Crawford <alex.crawford@coreos.com>"]
 workspace = ".."
 
 [dependencies]
+byteorder = "1"
+chrono = "0.4"
 diesel = { version = "1", features = ["sqlite", "chrono"] }
 diesel-derive-enum = { version = "0.4", features = ["sqlite"] }
+failure = "0.1"
 futures = "0.1"
 grpcio = "0.2"
 protobuf = "1.4"
+sha2 = "0.7"
 
 [build-dependencies]
 grpcio-compiler = "0.2"
