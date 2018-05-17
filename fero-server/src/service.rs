@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
+
 use byteorder::{BigEndian, WriteBytesExt};
 use failure::Error;
 use futures::Future;
@@ -167,7 +169,7 @@ impl FeroService {
         threshold: i32,
     ) -> Result<(), Error> {
         let mut payload = Vec::new();
-        payload.write_u64::<BigEndian>(ident.get_secretKeyId())?;
+        payload.write(ident.get_secretKeyName().as_bytes())?;
         payload.write_i32::<BigEndian>(threshold)?;
 
         let (conn, _) = self.database.authenticate(ident, &payload)?;
@@ -182,7 +184,7 @@ impl FeroService {
         weight: i32,
     ) -> Result<(), Error> {
         let mut payload = Vec::new();
-        payload.write_u64::<BigEndian>(ident.get_secretKeyId())?;
+        payload.write(ident.get_secretKeyName().as_bytes())?;
         payload.write_u64::<BigEndian>(user_key_id)?;
         payload.write_i32::<BigEndian>(weight)?;
 
