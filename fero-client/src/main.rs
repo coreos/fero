@@ -57,9 +57,9 @@ struct Opt {
 
 #[derive(StructOpt)]
 struct SignCommand {
-    #[structopt(short = "k", long = "secret-key-id", parse(try_from_str = "parse_hex"))]
-    /// The secret key id to sign with.
-    secret_key_id: u64,
+    #[structopt(short = "k", long = "secret-key")]
+    /// The name of the secret key to sign with.
+    secret_key_name: String,
     #[structopt(short = "f", long = "file", parse(from_os_str))]
     /// The file to sign.
     file: PathBuf,
@@ -191,7 +191,7 @@ pub fn main() -> Result<(), Error> {
     match opts.command {
         FeroCommand::Sign(sign_opts) => {
             let mut ident = Identification::new();
-            ident.set_secretKeyId(sign_opts.secret_key_id);
+            ident.set_secretKeyName(sign_opts.secret_key_name);
             ident.set_signatures(RepeatedField::from_vec(build_signatures(&sign_opts.signatures)?));
 
             let mut req = SignRequest::new();
