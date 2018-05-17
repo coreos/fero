@@ -49,7 +49,7 @@ impl Hsm {
         }))
     }
 
-    pub fn create_signature<T: AsRef<[u8]>>(
+    pub fn create_pgp_signature<T: AsRef<[u8]>>(
         &self,
         payload: T,
         signing_key: u16,
@@ -68,6 +68,23 @@ impl Hsm {
         sig_packet.set_contents(Signature::Rsa(BigUint::from_bytes_be(&signature)))?;
 
         Ok(sig_packet)
+    }
+
+    pub fn create_rsa_signature<T: AsRef<[u8]>>(
+        &self,
+        payload: T,
+        signing_key: u16,
+    ) -> Result<Vec<u8>, Error> {
+        let payload = payload.as_ref();
+        let hash_algorithm = match payload.len() {
+            32 => HashAlgorithm::Sha256,
+            48 => HashAlgorithm::Sha384,
+            64 => HashAlgorithm::Sha512,
+            _ => bail!("Payload must be a SHA256, SHA384 or SHA512 hash"),
+        };
+        let digestinfo = Hsm::create_digestinfo(payload.as_ref(), hash_algorithm)?;
+
+        self.session.sign_pkcs1v1_5(signing_key, false, digestinfo)
     }
 
     pub fn put_rsa_key(&self, key: &Key) -> Result<u16, Error> {

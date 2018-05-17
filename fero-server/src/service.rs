@@ -36,7 +36,11 @@ pub struct FeroService {
 
 impl Fero for FeroService {
     fn sign_payload(&self, ctx: RpcContext, mut req: SignRequest, sink: UnarySink<SignResponse>) {
-        let operation_result = self.sign_payload(req.get_identification(), req.get_payload());
+        let operation_result = self.sign_payload(
+            req.get_identification(),
+            req.get_payload(),
+            req.get_sigType(),
+        );
 
         let logged_result = match operation_result {
             Ok(_) => OperationResult::Success,
@@ -201,17 +205,27 @@ impl FeroService {
         &self,
         ident: &Identification,
         payload: &[u8],
+        sig_type: SignRequest_SignatureType,
     ) -> Result<Vec<u8>, Error>{
         let (database, data) = self.database.authenticate(ident, payload)?;
 
         let hsm_key = database.get_hsm_key_id()?;
-        let mut signature = self.signer.create_signature(data, hsm_key, HashAlgorithm::Sha256)?;
-        signature.set_signer(ident.secretKeyId as u64);
 
-        let pgp_packet = Packet::Signature(signature);
-        let packet_bytes = pgp_packet.to_bytes()?;
+        let out = match sig_type {
+            SignRequest_SignatureType::PGP => match database.get_pgp_key_id() {
+                Some(pgp_key_id) => self.signer
+                    .create_pgp_signature(data, hsm_key, HashAlgorithm::Sha256)
+                    .and_then(|mut sig| {
+                        sig.set_signer(pgp_key_id);
+                        Packet::Signature(sig).to_bytes()
+                    })
+                    .map(Vec::from)?,
+                None => bail!("Tried to use non-PGP key for PGP signature"),
+            }
+            SignRequest_SignatureType::PKCS1V1_5 => self.signer.create_rsa_signature(data, hsm_key)?
+        };
 
-        Ok(Vec::from(packet_bytes))
+        Ok(out)
     }
 
     fn get_logs(&self, min_index: i32) -> Result<Vec<LogEntry>, Error> {
