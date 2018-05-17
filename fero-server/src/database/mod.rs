@@ -47,10 +47,10 @@ impl Configuration {
         let conn = SqliteConnection::establish(&self.connection_string)?;
 
         let secret = schema::secrets::dsl::secrets
-            .filter(schema::secrets::columns::key_id.eq(ident.secretKeyId as i64))
+            .filter(schema::secrets::columns::name.eq(ident.get_secretKeyName()))
             .load::<SecretKey>(&conn)?
             .pop()
-            .ok_or(format_err!("No secret key found ({})", ident.secretKeyId))?;
+            .ok_or(format_err!("No secret key found ({})", ident.get_secretKeyName()))?;
 
         let applicable_users = schema::users::table
             .select(schema::users::all_columns)
@@ -112,7 +112,11 @@ impl Configuration {
         }
 
         if weight >= secret.threshold {
-            Ok((AuthenticatedConnection { connection: conn, secret_key: ident.secretKeyId }, payload.to_vec()))
+            Ok((AuthenticatedConnection {
+                connection: conn,
+                secret_key: secret.key_id.map(|id| id as u64),
+                secret_name: String::from(ident.get_secretKeyName()),
+            }, payload.to_vec()))
         } else {
             bail!("Signatures do not meet threshold");
         }
@@ -124,6 +128,7 @@ impl Configuration {
     ) -> Result<AuthenticatedConnection, Error> {
         Ok(AuthenticatedConnection {
             secret_key: local_ident.secret_key,
+            secret_name: local_ident.name,
             connection: SqliteConnection::establish(&self.connection_string)?,
         })
     }
@@ -138,11 +143,11 @@ impl Configuration {
             .map_err(|e| e.into())
     }
 
-    pub fn insert_secret_key(&self, hsm_id: i32, key_id: i64, threshold: i32) -> Result<(), Error> {
+    pub fn insert_secret_key(&self, hsm_id: i32, key_id: Option<i64>, name: &str, threshold: i32) -> Result<(), Error> {
         let conn = SqliteConnection::establish(&self.connection_string)?;
 
         diesel::insert_into(schema::secrets::dsl::secrets)
-            .values(&NewSecret { key_id, hsm_id, threshold })
+            .values(&NewSecret { key_id: key_id, hsm_id, name: String::from(name), threshold })
             .execute(&conn)
             .map(|_| ())
             .map_err(|e| e.into())
@@ -220,14 +225,15 @@ impl Configuration {
 }
 
 pub struct AuthenticatedConnection {
-    secret_key: u64,
+    secret_key: Option<u64>,
+    secret_name: String,
     connection: SqliteConnection,
 }
 
 impl AuthenticatedConnection {
     pub fn get_hsm_key_id(&self) -> Result<u16, Error> {
         schema::secrets::dsl::secrets
-            .filter(schema::secrets::columns::key_id.eq(self.secret_key as i64))
+            .filter(schema::secrets::columns::name.eq(&self.secret_name))
             .load::<SecretKey>(&self.connection)?
             .pop()
             .map(|key| key.hsm_id as u16)
@@ -241,12 +247,12 @@ impl AuthenticatedConnection {
             .pop())
     }
 
-    pub fn upsert_user_key_weight(&self, secret_key_id: u64, user: UserKey, weight: i32) -> Result<(), Error> {
+    pub fn upsert_user_key_weight(&self, user: UserKey, weight: i32) -> Result<(), Error> {
         let secret = schema::secrets::dsl::secrets
-            .filter(schema::secrets::columns::key_id.eq(secret_key_id as i64))
+            .filter(schema::secrets::columns::name.eq(&self.secret_name))
             .load::<SecretKey>(&self.connection)?
             .pop()
-            .ok_or(format_err!("No such secret key"))?;
+            .ok_or(format_err!("No secret key found ({})", self.secret_name))?;
 
         if schema::user_secret_weights::dsl::user_secret_weights
             .filter(schema::user_secret_weights::dsl::user_id.eq(user.id))

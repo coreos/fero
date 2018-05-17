@@ -189,7 +189,7 @@ impl FeroService {
         let (conn, _) = self.database.authenticate(ident, &payload)?;
 
         if let Some(user) = conn.get_user_key(user_key_id)? {
-            conn.upsert_user_key_weight(ident.get_secretKeyId(), user, weight)
+            conn.upsert_user_key_weight(user, weight)
         } else {
             bail!("No such user")
         }

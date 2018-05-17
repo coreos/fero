@@ -23,9 +23,10 @@ use fero_proto::log;
 #[derive(Queryable)]
 pub struct SecretKey {
     pub id: i32,
-    pub key_id: i64,
+    pub key_id: Option<i64>,
     pub threshold: i32,
     pub hsm_id: i32,
+    pub name: String,
 }
 
 #[derive(Queryable)]
@@ -72,9 +73,10 @@ pub struct HsmLog {
 #[derive(Insertable)]
 #[table_name = "secrets"]
 pub struct NewSecret {
-    pub key_id: i64,
+    pub key_id: Option<i64>,
     pub threshold: i32,
     pub hsm_id: i32,
+    pub name: String,
 }
 
 #[derive(Insertable)]
