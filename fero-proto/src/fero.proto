@@ -52,6 +52,11 @@ message LogEntry {
 message SignRequest {
 	Identification identification = 1;
 	bytes payload = 2;
+	enum SignatureType {
+		PGP = 0;
+		PKCS1V1_5 = 1;
+	}
+	SignatureType sigType = 3;
 }
 
 message ThresholdRequest {
