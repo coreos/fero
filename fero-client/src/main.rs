@@ -35,7 +35,8 @@ use grpcio::{ChannelBuilder, EnvBuilder};
 use protobuf::repeated::RepeatedField;
 use structopt::StructOpt;
 
-use fero_proto::fero::{Identification, LogRequest, SignRequest, ThresholdRequest, WeightRequest};
+use fero_proto::fero::{Identification, LogRequest, SignRequest, SignRequest_SignatureType,
+                       ThresholdRequest, WeightRequest};
 use fero_proto::fero_grpc::FeroClient;
 use fero_proto::log::FeroLogEntry;
 
@@ -196,6 +197,7 @@ pub fn main() -> Result<(), Error> {
 
             let mut req = SignRequest::new();
             req.set_identification(ident);
+            req.set_sigType(SignRequest_SignatureType::PGP);
             req.set_payload({
                 let mut file = File::open(sign_opts.file)?;
                 let mut contents = Vec::new();
