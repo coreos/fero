@@ -16,6 +16,7 @@ extern crate byteorder;
 extern crate failure;
 extern crate fero_proto;
 extern crate grpcio;
+#[macro_use]
 extern crate log;
 extern crate loggerv;
 extern crate protobuf;
@@ -36,6 +37,7 @@ use structopt::StructOpt;
 
 use fero_proto::fero::{Identification, LogRequest, SignRequest, ThresholdRequest, WeightRequest};
 use fero_proto::fero_grpc::FeroClient;
+use fero_proto::log::FeroLogEntry;
 
 #[derive(StructOpt)]
 #[structopt(name = "fero-client")]
@@ -252,6 +254,18 @@ pub fn main() -> Result<(), Error> {
             let reply = client.get_logs(&req)?;
             for log in reply.get_logs() {
                 println!("{}", log);
+            }
+
+            let logs = reply.get_logs().into_iter().map(FeroLogEntry::from).collect::<Vec<_>>();
+            match FeroLogEntry::verify(&logs) {
+                Ok(_) => {
+                    if reply.get_logs()[0].id != 1 {
+                        warn!("Log verification OK, but initial log index was missing.");
+                    } else {
+                        info!("Log verification OK.");
+                    }
+                }
+                Err(e) => error!("Log verification failed!\nDetails: {}", e),
             }
         }
     }
