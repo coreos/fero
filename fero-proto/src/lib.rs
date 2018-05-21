@@ -3,6 +3,7 @@ extern crate chrono;
 extern crate diesel;
 #[macro_use]
 extern crate diesel_derive_enum;
+#[macro_use]
 extern crate failure;
 extern crate futures;
 extern crate grpcio;

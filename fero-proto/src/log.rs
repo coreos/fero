@@ -179,6 +179,18 @@ impl FeroLogEntry {
 
         Ok(Vec::from(hash_result))
     }
+
+    pub fn verify(entries: &[FeroLogEntry]) -> Result<(), Error> {
+        for i in 1..entries.len() {
+            let hash = entries[i].hash(&entries[i - 1].hash)?;
+
+            if hash != entries[i].hash {
+                bail!("Failed entry: {:?}", entries[i]);
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl<T> From<T> for FeroLogEntry
