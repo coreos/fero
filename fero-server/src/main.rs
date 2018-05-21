@@ -140,6 +140,12 @@ struct AddUserCommand {
     #[structopt(short = "f", long = "file", parse(from_os_str))]
     /// File containing the user's GPG public key to add.
     file: PathBuf,
+    #[structopt(short = "k", long = "authkey")]
+    /// YubiHSM2 AuthKey to use.
+    hsm_authkey: u16,
+    #[structopt(short = "w", long = "password")]
+    /// Password for the HSM AuthKey.
+    hsm_password: String,
 }
 
 #[derive(StructOpt)]
@@ -238,11 +244,17 @@ pub fn main() -> Result<(), Error> {
             )?;
         }
         FeroServerCommand::AddUser(user_opts) => {
+            let hsm = hsm::Hsm::new(
+                &opts.hsm_connector_url,
+                user_opts.hsm_authkey,
+                &user_opts.hsm_password,
+            )?;
+
             let mut key_bytes = Vec::new();
             File::open(&user_opts.file)?.read_to_end(&mut key_bytes)?;
             let key_id = local::find_keyid(&key_bytes)?;
 
-            local::store_user(&opts.database, key_id, &key_bytes)?;
+            local::store_user(&hsm, &opts.database, key_id, &key_bytes)?;
         }
         FeroServerCommand::SetUserWeight(weight_opts) => {
             local::set_user_weight(

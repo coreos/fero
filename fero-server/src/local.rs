@@ -131,9 +131,28 @@ pub(crate) fn import_secret(
     interior_result
 }
 
-pub(crate) fn store_user(database_url: &str, key_id: u64, key: &[u8]) -> Result<(), Error> {
+pub(crate) fn store_user(hsm: &Hsm, database_url: &str, key_id: u64, key: &[u8]) -> Result<(), Error> {
     let database = database::Configuration::new(database_url);
-    database.insert_user_key(key_id, key)
+    let interior_result = database.insert_user_key(key_id, key);
+
+    match interior_result {
+        Ok(_) => logging::log_operation(
+            hsm,
+            &database,
+            OperationType::AddUser,
+            OperationResult::Success,
+            None,
+        ),
+        Err(_) => logging::log_operation(
+            hsm,
+            &database,
+            OperationType::AddUser,
+            OperationResult::Failure,
+            None,
+        ),
+    }.unwrap_or_else(|e| panic!("Failed to log operation: {}", e));
+
+    interior_result
 }
 
 pub(crate) fn set_user_weight(
