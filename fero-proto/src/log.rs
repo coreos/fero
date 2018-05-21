@@ -1,4 +1,5 @@
 use std::io::{Cursor, Read};
+use std::ops::Deref;
 
 use byteorder::{BigEndian, ByteOrder, ReadBytesExt, WriteBytesExt};
 use chrono::NaiveDateTime;
@@ -18,11 +19,32 @@ pub enum OperationType {
     AddUser,
 }
 
+impl From<fero::LogEntry_OperationType> for OperationType {
+    fn from(ty: fero::LogEntry_OperationType) -> OperationType {
+        match ty {
+            fero::LogEntry_OperationType::SIGN => OperationType::Sign,
+            fero::LogEntry_OperationType::THRESHOLD => OperationType::Threshold,
+            fero::LogEntry_OperationType::WEIGHT => OperationType::Weight,
+            fero::LogEntry_OperationType::ADD_SECRET => OperationType::AddSecret,
+            fero::LogEntry_OperationType::ADD_USER => OperationType::AddUser,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, DbEnum)]
 #[repr(u8)]
 pub enum OperationResult {
     Success,
     Failure,
+}
+
+impl From<fero::LogEntry_OperationResult> for OperationResult {
+    fn from(res: fero::LogEntry_OperationResult) -> OperationResult {
+        match res {
+            fero::LogEntry_OperationResult::SUCCESS => OperationResult::Success,
+            fero::LogEntry_OperationResult::FAILURE => OperationResult::Failure,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -38,8 +60,11 @@ pub struct HsmLogEntry {
     pub hash: Vec<u8>,
 }
 
-impl From<fero::HsmLog> for HsmLogEntry {
-    fn from(log: fero::HsmLog) -> HsmLogEntry {
+impl<T> From<T> for HsmLogEntry
+where
+    T: Deref<Target = fero::HsmLog>,
+{
+    fn from(log: T) -> HsmLogEntry {
         HsmLogEntry {
             hsm_index: log.id as u16,
             command: log.command as u8,
@@ -153,5 +178,30 @@ impl FeroLogEntry {
         let hash_result: &[u8] = &hasher.result();
 
         Ok(Vec::from(hash_result))
+    }
+}
+
+impl<T> From<T> for FeroLogEntry
+where
+    T: Deref<Target = fero::LogEntry>
+{
+    fn from(entry: T) -> FeroLogEntry {
+        let ident = if entry.has_ident() {
+            Some(entry.get_ident())
+        } else {
+            None
+        };
+
+        FeroLogEntry {
+            request_type: entry.operation_type.into(),
+            timestamp: NaiveDateTime::from_timestamp(
+                entry.get_timestamp().get_seconds(),
+                entry.get_timestamp().get_nanos() as u32
+            ),
+            result: entry.result.into(),
+            identification: ident.cloned(),
+            hsm_logs: entry.hsm_logs.iter().map(HsmLogEntry::from).collect(),
+            hash: entry.hash.clone(),
+        }
     }
 }
