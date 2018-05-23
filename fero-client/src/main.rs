@@ -154,13 +154,6 @@ fn parse_hex(s: &str) -> Result<u64, ParseIntError> {
     }
 }
 
-pub fn main() {
-    if let Err(e) = run() {
-        println!("{:?}", e);
-        ::std::process::exit(1);
-    }
-}
-
 fn build_signatures(signature_files: &[PathBuf]) -> Result<Vec<Vec<u8>>, Error> {
     let mut signatures_contents = Vec::new();
 
@@ -174,7 +167,7 @@ fn build_signatures(signature_files: &[PathBuf]) -> Result<Vec<Vec<u8>>, Error> 
     Ok(signatures_contents)
 }
 
-fn run() -> Result<(), Error> {
+pub fn main() -> Result<(), Error> {
     let opts = Opt::from_args();
 
     loggerv::init_with_verbosity(opts.verbosity)?;

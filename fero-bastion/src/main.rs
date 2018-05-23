@@ -69,14 +69,7 @@ fn create_bastion(
         .map_err(|e| e.into())
 }
 
-pub fn main() {
-    if let Err(e) = run() {
-        println!("{:?}", e);
-        ::std::process::exit(1);
-    }
-}
-
-fn run() -> Result<(), Error> {
+pub fn main() -> Result<(), Error> {
     let opts = Opt::from_args();
 
     loggerv::init_with_verbosity(opts.verbosity)?;
