@@ -26,7 +26,7 @@ use failure::Error;
 use gag::Gag;
 use libyubihsm::{Capability, ObjectType, ReturnCode, Yubihsm};
 use num::BigUint;
-use pretty_good::{Key, Packet};
+use pretty_good::{Key, KeyMaterial, Packet};
 use secstr::SecStr;
 
 use database;
@@ -110,8 +110,20 @@ pub(crate) fn import_pgp_secret(
 
     let db_conf = database::Configuration::new(database);
 
+    let (pubkey_material, privkey_material) = match subkey.key_material {
+        KeyMaterial::Rsa(ref pubkey_material, Some(ref privkey_material)) => {
+            (pubkey_material, privkey_material)
+        }
+        KeyMaterial::Rsa(_, None) => bail!(
+            "No private key material found. Either your PGP packet is malformed or there's a bug \
+             in `pretty-good`."
+        ),
+        KeyMaterial::Dsa(_, _) => bail!("DSA keys aren't supported."),
+        KeyMaterial::Elgamal(_, _) => bail!("Elgamal keys aren't supported."),
+    };
+
     let interior_result = hsm
-        .put_rsa_key(&subkey)
+        .put_rsa_key(&pubkey_material.n, &privkey_material.p, &privkey_material.q)
         .and_then(|hsm_id| store_key(&db_conf, hsm_id, Some(subkey.id()?), name, threshold));
 
     match interior_result {
