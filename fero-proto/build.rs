@@ -80,6 +80,7 @@ fn compile(protos: &[&str], module: &str) {
     let mut desc_path = module_path.to_path_buf();
     desc_path.set_extension("desc");
     protoc.args(&["-o", &format!("{}", desc_path.display())]);
+    protoc.args(&["-I/usr/include/", "-I."]);
     for proto in protos {
         protoc.arg(format!("{}", proto));
     }
