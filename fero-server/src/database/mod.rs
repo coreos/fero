@@ -22,7 +22,7 @@ use diesel::{self, Connection};
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use failure::Error;
-use gpgme::{Context, Protocol};
+use gpgme::{Context, Protocol, SignatureSummary};
 use tempfile::TempDir;
 
 use fero_proto::fero::*;
@@ -68,15 +68,23 @@ impl Configuration {
 
         let mut ids = HashSet::new();
         for signature in &ident.signatures {
-            let mut data = Vec::new();
-            let verification = gpg.verify_opaque(signature, &mut data)?;
-
-            // TODO can verify_opaque verify the payload?
-            if data != payload {
-                continue;
-            }
+            let verification = gpg.verify_detached(signature, payload)?;
 
             for signature in verification.signatures() {
+                // Valid signatures here actually should always have empty summaries, since the
+                // user keys we import above are not signed by a key trusted by our brand-new
+                // keyring, so all user keys have unknown validity. This check is primarily here to
+                // catch signatures over the wrong payload (SignatureSummary::RED), but this is the
+                // most technically-correct check (barring adding some extra plumbing above to
+                // generate a trusted key and sign each user key we import for each signing
+                // operation).
+                if !signature.summary().is_empty() &&
+                    signature.summary() != SignatureSummary::GREEN &&
+                    signature.summary() != SignatureSummary::VALID
+                {
+                    continue;
+                }
+
                 // It seems gpgme is not filling in the .key() field here, so we retrieve it from
                 // gpgme via the fingerprint of the signature.
                 let fingerprint = signature
