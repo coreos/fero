@@ -206,3 +206,66 @@ fn sign() {
 
     assert!(try_reset_device(), "Couldn't reset device after testing!");
 }
+
+#[test]
+fn dont_sign_invalid_user() {
+    let env = setup_environment(1, 0, 1).unwrap();
+
+    let artifact = "Test payload. This should NOT be signed successfully.".as_bytes();
+
+    let mut gpg = Context::from_protocol(Protocol::OpenPgp).unwrap();
+    gpg.set_engine_home_dir(env.directory.path().as_os_str().as_bytes())
+        .unwrap();
+
+    let mut signature = Vec::new();
+    let signer = gpg.find_key(format!("{:x}", env.invalid_users[0])).unwrap();
+    gpg.add_signer(&signer).unwrap();
+    gpg.sign_detached(artifact, &mut signature).unwrap();
+
+    let mut ident = Identification::new();
+    ident.set_secretKeyId(env.secret_id);
+    ident.set_signatures(RepeatedField::from_vec(vec![signature]));
+
+    assert!(env.fero_service.sign_payload(&ident, artifact).is_err());
+
+    assert!(try_reset_device(), "Couldn't reset device after testing!");
+}
+
+#[test]
+fn dont_sign_no_signatures() {
+    let env = setup_environment(1, 0, 0).unwrap();
+
+    let artifact = "Test payload. This should NOT be signed successfully.".as_bytes();
+
+    let mut ident = Identification::new();
+    ident.set_secretKeyId(env.secret_id);
+
+    assert!(env.fero_service.sign_payload(&ident, artifact).is_err());
+
+    assert!(try_reset_device(), "Couldn't reset device after testing!");
+}
+
+#[test]
+fn dont_sign_wrong_payload() {
+    let env = setup_environment(1, 1, 0).unwrap();
+
+    let artifact = "Test payload. This should NOT be signed successfully.".as_bytes();
+    let wrong_artifact = "Some other unrelated payload.".as_bytes();
+
+    let mut gpg = Context::from_protocol(Protocol::OpenPgp).unwrap();
+    gpg.set_engine_home_dir(env.directory.path().as_os_str().as_bytes())
+        .unwrap();
+
+    let mut signature = Vec::new();
+    let signer = gpg.find_key(format!("{:x}", env.valid_users[0])).unwrap();
+    gpg.add_signer(&signer).unwrap();
+    gpg.sign_detached(wrong_artifact, &mut signature).unwrap();
+
+    let mut ident = Identification::new();
+    ident.set_secretKeyId(env.secret_id);
+    ident.set_signatures(RepeatedField::from_vec(vec![signature]));
+
+    assert!(env.fero_service.sign_payload(&ident, artifact).is_err());
+
+    assert!(try_reset_device(), "Couldn't reset device after testing!");
+}
