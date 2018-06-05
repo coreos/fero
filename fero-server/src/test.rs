@@ -186,7 +186,7 @@ fn sign() {
     let mut signature = Vec::new();
     let signer = gpg.find_key(format!("{:x}", env.valid_users[0])).unwrap();
     gpg.add_signer(&signer).unwrap();
-    gpg.sign_normal(artifact, &mut signature).unwrap();
+    gpg.sign_detached(artifact, &mut signature).unwrap();
 
     let mut ident = Identification::new();
     ident.set_secretKeyId(env.secret_id);
