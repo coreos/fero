@@ -5,11 +5,13 @@ authors = ["Alex Crawford <alex.crawford@coreos.com>"]
 workspace = ".."
 
 [dependencies]
+chrono = "0.4"
 failure = "0.1"
 futures = "0.1"
 grpcio = "0.2"
 log = "0.4"
 loggerv = "0.7"
+protobuf = "1.4"
 structopt = "0.2"
 
 [dependencies.fero-proto]
