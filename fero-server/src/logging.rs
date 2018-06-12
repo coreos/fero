@@ -39,6 +39,7 @@ pub fn create_fero_log(
     hsm_index_end: i32,
     parent_entry: &FeroLog,
     identification: Option<Identification>,
+    timestamp: NaiveDateTime,
 ) -> Result<NewFeroLog, Error> {
     // `HsmLogEntry` is defined in fero-proto, which can't link against libyubihsm (so can't depend
     // on libyubihsm-rs), and `LogEntry` is defined in libyubihsm, so we can't use a `From` here.
@@ -59,7 +60,7 @@ pub fn create_fero_log(
 
     let mut new_fero_log = FeroLogEntry {
         request_type,
-        timestamp: Utc::now().naive_utc(),
+        timestamp,
         result,
         hsm_logs,
         identification,
@@ -87,6 +88,7 @@ pub fn log_operation(
     request_type: OperationType,
     result: OperationResult,
     identification: Option<Identification>,
+    timestamp: NaiveDateTime,
 ) -> Result<(), Error> {
     let last_hsm_index = database.last_hsm_log_entry()?;
 
@@ -125,6 +127,7 @@ pub fn log_operation(
         new_hsm_index.unwrap_or(last_hsm_index),
         &parent_log,
         identification,
+        timestamp,
     )?;
 
     database.insert_fero_log(new_fero_log)?;

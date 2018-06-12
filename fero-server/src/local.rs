@@ -20,6 +20,7 @@ use std::str;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use chrono::prelude::*;
 use diesel::{sqlite::SqliteConnection, Connection};
 use diesel_migrations::run_pending_migrations;
 use failure::Error;
@@ -135,6 +136,7 @@ pub(crate) fn import_pgp_secret(
             OperationType::AddSecret,
             OperationResult::Success,
             None,
+            Utc::now().naive_utc(),
         ),
         Err(_) => logging::log_operation(
             hsm,
@@ -142,6 +144,7 @@ pub(crate) fn import_pgp_secret(
             OperationType::AddSecret,
             OperationResult::Failure,
             None,
+            Utc::now().naive_utc(),
         ),
     }.unwrap_or_else(|e| panic!("Failed to log operation: {}", e));
 
@@ -196,6 +199,7 @@ pub(crate) fn import_pem_secret(
             OperationType::AddSecret,
             OperationResult::Success,
             None,
+            Utc::now().naive_utc(),
         ),
         Err(_) => logging::log_operation(
             hsm,
@@ -203,6 +207,7 @@ pub(crate) fn import_pem_secret(
             OperationType::AddSecret,
             OperationResult::Failure,
             None,
+            Utc::now().naive_utc(),
         ),
     }.unwrap_or_else(|e| panic!("Failed to log operation: {}", e));
 
@@ -220,6 +225,7 @@ pub(crate) fn store_user(hsm: &Hsm, database_url: &str, key_id: u64, key: &[u8])
             OperationType::AddUser,
             OperationResult::Success,
             None,
+            Utc::now().naive_utc(),
         ),
         Err(_) => logging::log_operation(
             hsm,
@@ -227,6 +233,7 @@ pub(crate) fn store_user(hsm: &Hsm, database_url: &str, key_id: u64, key: &[u8])
             OperationType::AddUser,
             OperationResult::Failure,
             None,
+            Utc::now().naive_utc(),
         ),
     }.unwrap_or_else(|e| panic!("Failed to log operation: {}", e));
 
