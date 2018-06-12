@@ -57,17 +57,20 @@ message SignRequest {
 		PKCS1V1_5 = 1;
 	}
 	SignatureType sigType = 3;
+	google.protobuf.Timestamp timestamp = 4;
 }
 
 message ThresholdRequest {
 	Identification identification = 1;
 	int32 threshold = 2;
+	google.protobuf.Timestamp timestamp = 3;
 }
 
 message WeightRequest {
 	Identification identification = 1;
 	uint64 userKeyId = 2;
 	int32 weight = 3;
+	google.protobuf.Timestamp timestamp = 4;
 }
 
 message LogRequest {
