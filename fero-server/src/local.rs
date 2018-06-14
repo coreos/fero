@@ -30,7 +30,9 @@ use pretty_good::{Key, Packet};
 use secstr::SecStr;
 
 use database;
+use fero_proto::log::*;
 use hsm::Hsm;
+use logging;
 
 const DEFAULT_HSM_AUTHKEY_ID: u16 = 1;
 const DEFAULT_HSM_PASSWORD: &'static str = "password";
@@ -84,12 +86,11 @@ pub(crate) fn find_keyid(packets_bytes: &[u8]) -> Result<u64, Error> {
 }
 
 pub(crate) fn store_key(
-    database_url: &str,
+    database: &database::Configuration,
     hsm_id: u16,
     key_id: u64,
     threshold: i32,
 ) -> Result<(), Error> {
-    let database = database::Configuration::new(database_url);
     database.insert_secret_key(i32::from(hsm_id), key_id as i64, threshold)
 }
 
@@ -104,14 +105,54 @@ pub(crate) fn import_secret(
     File::open(filename)?.read_to_end(&mut key_bytes)?;
     let subkey = find_secret_subkey(&key_bytes, subkey)?;
 
-    let hsm_id = hsm.put_rsa_key(&subkey)?;
+    let db_conf = database::Configuration::new(database);
 
-    store_key(database, hsm_id, subkey.id()?, threshold)
+    let interior_result = hsm
+        .put_rsa_key(&subkey)
+        .and_then(|hsm_id| store_key(&db_conf, hsm_id, subkey.id()?, threshold));
+
+    match interior_result {
+        Ok(_) => logging::log_operation(
+            hsm,
+            &db_conf,
+            OperationType::AddSecret,
+            OperationResult::Success,
+            None,
+        ),
+        Err(_) => logging::log_operation(
+            hsm,
+            &db_conf,
+            OperationType::AddSecret,
+            OperationResult::Failure,
+            None,
+        ),
+    }.unwrap_or_else(|e| panic!("Failed to log operation: {}", e));
+
+    interior_result
 }
 
-pub(crate) fn store_user(database_url: &str, key_id: u64, key: &[u8]) -> Result<(), Error> {
+pub(crate) fn store_user(hsm: &Hsm, database_url: &str, key_id: u64, key: &[u8]) -> Result<(), Error> {
     let database = database::Configuration::new(database_url);
-    database.insert_user_key(key_id, key)
+    let interior_result = database.insert_user_key(key_id, key);
+
+    match interior_result {
+        Ok(_) => logging::log_operation(
+            hsm,
+            &database,
+            OperationType::AddUser,
+            OperationResult::Success,
+            None,
+        ),
+        Err(_) => logging::log_operation(
+            hsm,
+            &database,
+            OperationType::AddUser,
+            OperationResult::Failure,
+            None,
+        ),
+    }.unwrap_or_else(|e| panic!("Failed to log operation: {}", e));
+
+    interior_result
 }
 
 pub(crate) fn set_user_weight(

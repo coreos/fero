@@ -17,12 +17,14 @@ use failure::Error;
 use futures::Future;
 use grpcio::{self, RpcContext, RpcStatus, UnarySink};
 use pretty_good::{HashAlgorithm, Packet};
+use protobuf::{Message, repeated::RepeatedField, well_known_types::Timestamp};
 
 use database::Configuration;
 use fero_proto::fero::*;
 use fero_proto::fero_grpc::*;
+use fero_proto::log::*;
 use hsm::*;
-
+use logging;
 
 #[derive(Clone)]
 pub struct FeroService {
@@ -31,80 +33,125 @@ pub struct FeroService {
 }
 
 impl Fero for FeroService {
-    fn sign_payload(&self, ctx: RpcContext, req: SignRequest, sink: UnarySink<SignResponse>) {
-        match self.sign_payload(
-            req.get_identification(),
-            req.get_payload(),
-        ) {
+    fn sign_payload(&self, ctx: RpcContext, mut req: SignRequest, sink: UnarySink<SignResponse>) {
+        let operation_result = self.sign_payload(req.get_identification(), req.get_payload());
+
+        let logged_result = match operation_result {
+            Ok(_) => OperationResult::Success,
+            Err(_) => OperationResult::Failure,
+        };
+
+        logging::log_operation(
+            &self.signer,
+            &self.database,
+            OperationType::Sign,
+            logged_result,
+            Some(req.take_identification()),
+        ).unwrap_or_else(|e| panic!("Failed to log an operation: {}", e));
+
+        match operation_result {
             Ok(signature) => {
                 let mut response = SignResponse::new();
                 response.set_payload(signature);
-
                 ctx.spawn(sink.success(response).map_err(move |err| {
                     error!("failed to reply {:?}: {:?}", req, err)
                 }))
             }
-            Err(err) => {
-                info!("Failed to sign payload: {}", err);
-                ctx.spawn(
-                    sink.fail(RpcStatus {
-                        status: grpcio::RpcStatusCode::PermissionDenied,
-                        details: Some("Failed to sign payload".to_string()),
-                    }).map_err(move |err| error!("failed to reply {:?}: {:?}", req, err)),
-                )
+            Err(e) => {
+                warn!("Failed to sign payload: {}", e);
+                ctx.spawn(sink.fail(RpcStatus {
+                    status: grpcio::RpcStatusCode::PermissionDenied,
+                    details: Some(format!("{}", e)),
+                }).map_err(move |err| error!("failed to reply {:?}: {:?}", req, err)))
             }
-        }
+        };
     }
 
     fn set_secret_key_threshold(
         &self,
         ctx: RpcContext,
-        req: ThresholdRequest,
+        mut req: ThresholdRequest,
         sink: UnarySink<ThresholdResponse>,
     ) {
-        match self.set_secret_key_threshold(req.get_identification(), req.get_threshold()) {
-            Ok(()) => {
-                ctx.spawn(sink.success(ThresholdResponse::new()).map_err(move |err| {
-                    error!("failed to reply {:?}: {:?}", req, err)
-                }))
-            }
-            Err(err) => {
-                info!("Failed to update secret key threshold: {}", err);
-                ctx.spawn(
-                    sink.fail(RpcStatus {
-                        status: grpcio::RpcStatusCode::InvalidArgument,
-                        details: Some("Failed to update secret key threshold".to_string()),
-                    }).map_err(move |err| error!("failed to reply {:?}: {:?}", req, err)),
-                )
-            }
+        let operation_result = self.set_secret_key_threshold(
+            req.get_identification(),
+            req.get_threshold(),
+        );
+
+        let logged_result = match operation_result {
+            Ok(_) => OperationResult::Success,
+            Err(_) => OperationResult::Failure,
+        };
+
+        logging::log_operation(
+            &self.signer,
+            &self.database,
+            OperationType::Threshold,
+            logged_result,
+            Some(req.take_identification()),
+        ).unwrap_or_else(|e| panic!("Failed to log an operation: {}", e));
+
+        match operation_result {
+            Ok(_) => ctx.spawn(sink.success(ThresholdResponse::new()).map_err(move |err| {
+                error!("failed to reply {:?}: {:?}", req, err)
+            })),
+            Err(e) => ctx.spawn(sink.fail(RpcStatus {
+                status: grpcio::RpcStatusCode::InvalidArgument,
+                details: Some(format!("{}", e)),
+            }).map_err(move |err| error!("failed to reply {:?}: {:?}", req, err))),
         }
     }
 
     fn set_user_key_weight(
         &self,
         ctx: RpcContext,
-        req: WeightRequest,
+        mut req: WeightRequest,
         sink: UnarySink<WeightResponse>,
     ) {
-        match self.set_user_key_weight(
+        let operation_result = self.set_user_key_weight(
             req.get_identification(),
             req.get_userKeyId(),
             req.get_weight(),
-        ) {
-            Ok(()) => {
-                ctx.spawn(sink.success(WeightResponse::new()).map_err(move |err| {
+        );
+
+        let logged_result = match operation_result {
+            Ok(_) => OperationResult::Success,
+            Err(_) => OperationResult::Failure,
+        };
+
+        logging::log_operation(
+            &self.signer,
+            &self.database,
+            OperationType::Weight,
+            logged_result,
+            Some(req.take_identification()),
+        ).unwrap_or_else(|e| panic!("Failed to log an operation: {}", e));
+
+        match operation_result {
+            Ok(_) => ctx.spawn(sink.success(WeightResponse::new()).map_err(move |err| {
+                error!("failed to reply {:?}: {:?}", req, err)
+            })),
+            Err(e) => ctx.spawn(sink.fail(RpcStatus {
+                status: grpcio::RpcStatusCode::InvalidArgument,
+                details: Some(format!("{}", e)),
+            }).map_err(move |err| error!("failed to reply {:?}: {:?}", req, err))),
+        }
+    }
+
+    fn get_logs(&self, ctx: RpcContext, req: LogRequest, sink: UnarySink<LogResponse>) {
+        match self.get_logs(req.get_minIndex()) {
+            Ok(logs) => {
+                let mut response = LogResponse::new();
+                response.set_logs(RepeatedField::from_vec(logs));
+
+                ctx.spawn(sink.success(response).map_err(move |err| {
                     error!("failed to reply {:?}: {:?}", req, err)
                 }))
             }
-            Err(err) => {
-                info!("Failed to update user key weight: {}", err);
-                ctx.spawn(
-                    sink.fail(RpcStatus {
-                        status: grpcio::RpcStatusCode::InvalidArgument,
-                        details: Some("Failed to update user key weight".to_string()),
-                    }).map_err(move |err| error!("failed to reply {:?}: {:?}", req, err)),
-                )
-            }
+            Err(err) => ctx.spawn(sink.fail(RpcStatus {
+                status: grpcio::RpcStatusCode::Aborted,
+                details: Some(format!("Failed to retrive logs: {}", err)),
+            }).map_err(move |err| error!("failed to reply {:?}: {:?}", req, err))),
         }
     }
 }
@@ -163,5 +210,61 @@ impl FeroService {
         let packet_bytes = pgp_packet.to_bytes()?;
 
         Ok(Vec::from(packet_bytes))
+    }
+
+    fn get_logs(&self, min_index: i32) -> Result<Vec<LogEntry>, Error> {
+        self.database
+            .fero_logs_since(min_index)?
+            .iter()
+            .map(|fero_db_log| -> Result<_, Error> {
+                let hsm_logs = self.database
+                    .associated_hsm_logs(fero_db_log)?
+                    .iter()
+                    .map(|hsm_db_log| {
+                        let mut hsm_log = HsmLog::new();
+
+                        hsm_log.set_id(hsm_db_log.hsm_index as u32);
+                        hsm_log.set_command(hsm_db_log.command as u32);
+                        hsm_log.set_data_length(hsm_db_log.data_length as u32);
+                        hsm_log.set_session_key(hsm_db_log.session_key as u32);
+                        hsm_log.set_target_key(hsm_db_log.target_key as u32);
+                        hsm_log.set_second_key(hsm_db_log.second_key as u32);
+                        hsm_log.set_result(hsm_db_log.result as u32);
+                        hsm_log.set_systick(hsm_db_log.systick as u32);
+                        hsm_log.set_hash(hsm_db_log.hash.clone());
+
+                        hsm_log
+                    })
+                    .collect::<Vec<_>>();
+
+                let mut entry = LogEntry::new();
+
+                entry.set_id(fero_db_log.id);
+                entry.set_operation_type(match fero_db_log.request_type {
+                    OperationType::Sign => LogEntry_OperationType::SIGN,
+                    OperationType::Threshold => LogEntry_OperationType::THRESHOLD,
+                    OperationType::Weight => LogEntry_OperationType::WEIGHT,
+                    OperationType::AddSecret => LogEntry_OperationType::ADD_SECRET,
+                    OperationType::AddUser => LogEntry_OperationType::ADD_USER,
+                });
+                let mut timestamp = Timestamp::new();
+                timestamp.set_seconds(fero_db_log.timestamp.timestamp());
+                timestamp.set_nanos(fero_db_log.timestamp.timestamp_subsec_nanos() as i32);
+                entry.set_timestamp(timestamp);
+                entry.set_result(match fero_db_log.result {
+                    OperationResult::Success => LogEntry_OperationResult::SUCCESS,
+                    OperationResult::Failure => LogEntry_OperationResult::FAILURE,
+                });
+                if let Some(ref ident_bytes) = fero_db_log.identification {
+                    let mut ident = Identification::new();
+                    ident.merge_from_bytes(ident_bytes)?;
+                    entry.set_ident(ident);
+                }
+                entry.set_hsm_logs(RepeatedField::from_vec(hsm_logs));
+                entry.set_hash(fero_db_log.hash.clone());
+
+                Ok(entry)
+            })
+            .collect::<Result<Vec<_>, Error>>()
     }
 }

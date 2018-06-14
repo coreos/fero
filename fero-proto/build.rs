@@ -113,6 +113,6 @@ fn check_protoc() {
 fn main() {
     check_protoc();
 
-    compile(&["src/fero.proto"], "fero")
+    compile(&["src/fero.proto", "google/protobuf/timestamp.proto"], "fero")
 }
 

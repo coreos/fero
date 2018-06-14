@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod models;
+pub(crate) mod models;
 mod schema;
 
 use std::collections::HashSet;
@@ -25,7 +25,7 @@ use failure::Error;
 use gpgme::{Context, Protocol, SignatureSummary};
 use tempfile::TempDir;
 
-use fero_proto::fero::*;
+use fero_proto::fero::Identification;
 use self::models::*;
 use super::local::LocalIdentification;
 
@@ -143,6 +143,76 @@ impl Configuration {
 
         diesel::insert_into(schema::secrets::dsl::secrets)
             .values(&NewSecret { key_id, hsm_id, threshold })
+            .execute(&conn)
+            .map(|_| ())
+            .map_err(|e| e.into())
+    }
+
+    pub fn fero_logs_since(&self, idx: i32) -> Result<Vec<FeroLog>, Error> {
+        let conn = SqliteConnection::establish(&self.connection_string)?;
+
+        schema::fero_logs::dsl::fero_logs
+            .order(schema::fero_logs::columns::id.asc())
+            .filter(schema::fero_logs::columns::id.gt(idx))
+            .load::<FeroLog>(&conn)
+            .map_err(|e| e.into())
+    }
+
+    pub fn associated_hsm_logs(&self, fero_log: &FeroLog) -> Result<Vec<HsmLog>, Error> {
+        let conn = SqliteConnection::establish(&self.connection_string)?;
+
+        schema::hsm_logs::dsl::hsm_logs
+            .order(schema::hsm_logs::columns::hsm_index.asc())
+            .filter(schema::hsm_logs::columns::hsm_index.gt(fero_log.hsm_index_start))
+            .filter(schema::hsm_logs::columns::hsm_index.le(fero_log.hsm_index_end))
+            .load::<HsmLog>(&conn)
+            .map_err(|e| e.into())
+    }
+
+    pub fn last_hsm_log_entry(&self) -> Result<Option<HsmLog>, Error> {
+        let conn = SqliteConnection::establish(&self.connection_string)?;
+
+        Ok(schema::hsm_logs::dsl::hsm_logs
+            .order(schema::hsm_logs::columns::hsm_index.asc())
+            .load::<HsmLog>(&conn)?
+            .pop())
+    }
+
+    pub fn last_fero_log_entry(&self) -> Result<Option<FeroLog>, Error> {
+        let conn = SqliteConnection::establish(&self.connection_string)?;
+
+        Ok(schema::fero_logs::dsl::fero_logs
+            .order(schema::fero_logs::columns::id.asc())
+            .load::<FeroLog>(&conn)?
+            .pop())
+    }
+
+    fn last_id(&self, conn: &SqliteConnection) -> Result<Option<i32>, Error> {
+        no_arg_sql_function!(last_insert_rowid, diesel::sql_types::Integer);
+        Ok(diesel::select(last_insert_rowid)
+           .load::<i32>(conn)?
+           .pop())
+    }
+
+    pub fn insert_hsm_logs(&self, hsm_logs: Vec<NewHsmLog>) -> Result<Option<i32>, Error> {
+        let conn = SqliteConnection::establish(&self.connection_string)?;
+
+        conn.transaction(|| {
+            for log in hsm_logs {
+                diesel::insert_into(schema::hsm_logs::dsl::hsm_logs)
+                    .values(&log)
+                    .execute(&conn)?;
+            }
+
+            self.last_id(&conn)
+        })
+    }
+
+    pub fn insert_fero_log(&self, fero_log: NewFeroLog) -> Result<(), Error> {
+        let conn = SqliteConnection::establish(&self.connection_string)?;
+
+        diesel::insert_into(schema::fero_logs::dsl::fero_logs)
+            .values(&fero_log)
             .execute(&conn)
             .map(|_| ())
             .map_err(|e| e.into())

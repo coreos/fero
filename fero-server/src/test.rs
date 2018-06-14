@@ -127,7 +127,7 @@ fn setup_environment(
             File::open(gpg_key.path())?.read_to_end(&mut key_bytes)?;
             let key_id = local::find_keyid(&key_bytes)?;
 
-            local::store_user(database_path, key_id, &key_bytes)?;
+            local::store_user(&hsm, database_path, key_id, &key_bytes)?;
             local::set_user_weight(database_path, key_id, secret_id, 1)?;
 
             Ok(key_id)

@@ -115,4 +115,27 @@ impl Hsm {
 
         Ok(object_id)
     }
+
+    pub fn logs(&self) -> Result<Vec<LogEntry>, Error> {
+        Ok(self.session.get_logs()?
+           .log_entries()
+           .into_iter()
+           .cloned()
+           .collect::<Vec<_>>())
+    }
+
+    pub fn logs_since(&self, last_log_index: u16) -> Result<Vec<LogEntry>, Error> {
+        let log = self.session.get_logs()?;
+        let out = log.log_entries()
+            .into_iter()
+            .cloned()
+            .filter(|l| l.index > last_log_index)
+            .collect::<Vec<_>>();
+
+        Ok(out)
+    }
+
+    pub fn set_log_index(&self, log_index: u16) -> Result<(), Error> {
+        self.session.set_log_index(log_index)
+    }
 }

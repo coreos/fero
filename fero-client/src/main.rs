@@ -16,6 +16,7 @@ extern crate byteorder;
 extern crate failure;
 extern crate fero_proto;
 extern crate grpcio;
+#[macro_use]
 extern crate log;
 extern crate loggerv;
 extern crate protobuf;
@@ -34,8 +35,9 @@ use grpcio::{ChannelBuilder, EnvBuilder};
 use protobuf::repeated::RepeatedField;
 use structopt::StructOpt;
 
-use fero_proto::fero::{Identification, SignRequest, ThresholdRequest, WeightRequest};
+use fero_proto::fero::{Identification, LogRequest, SignRequest, ThresholdRequest, WeightRequest};
 use fero_proto::fero_grpc::FeroClient;
+use fero_proto::log::FeroLogEntry;
 
 #[derive(StructOpt)]
 #[structopt(name = "fero-client")]
@@ -128,6 +130,13 @@ struct WeightPayloadCommand {
 }
 
 #[derive(StructOpt)]
+struct GetLogCommand {
+    #[structopt(short = "s", long = "since")]
+    /// Only retrieve logs created since this log index.
+    since: i32,
+}
+
+#[derive(StructOpt)]
 enum FeroCommand {
     #[structopt(name = "sign")]
     /// Sign the given file.
@@ -144,6 +153,9 @@ enum FeroCommand {
     #[structopt(name = "weight")]
     /// Update a given user's weight for a given secret key.
     Weight(WeightCommand),
+    #[structopt(name = "get-logs")]
+    /// Get the audit logs from the server.
+    GetLogs(GetLogCommand),
 }
 
 fn parse_hex(s: &str) -> Result<u64, ParseIntError> {
@@ -234,6 +246,27 @@ pub fn main() -> Result<(), Error> {
             req.set_weight(weight_opts.weight);
 
             client.set_user_key_weight(&req).map(|_| ())?;
+        }
+        FeroCommand::GetLogs(log_opts) => {
+            let mut req = LogRequest::new();
+            req.set_minIndex(log_opts.since);
+
+            let reply = client.get_logs(&req)?;
+            for log in reply.get_logs() {
+                println!("{}", log);
+            }
+
+            let logs = reply.get_logs().into_iter().map(FeroLogEntry::from).collect::<Vec<_>>();
+            match FeroLogEntry::verify(&logs) {
+                Ok(_) => {
+                    if reply.get_logs()[0].id != 1 {
+                        warn!("Log verification OK, but initial log index was missing.");
+                    } else {
+                        info!("Log verification OK.");
+                    }
+                }
+                Err(e) => error!("Log verification failed!\nDetails: {}", e),
+            }
         }
     }
 
