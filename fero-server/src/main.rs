@@ -52,6 +52,7 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::num::ParseIntError;
 use std::path::PathBuf;
+use std::str;
 use std::sync::Arc;
 use std::thread;
 
@@ -113,7 +114,7 @@ struct ServeCommand {
     hsm_authkey: u16,
     #[structopt(short = "w", long = "password")]
     /// Password for the HSM AuthKey.
-    hsm_password: String,
+    hsm_password: Option<String>,
 }
 
 #[derive(StructOpt)]
@@ -132,7 +133,7 @@ struct AddSecretCommand {
     hsm_authkey: u16,
     #[structopt(short = "w", long = "password")]
     /// Password for the HSM AuthKey.
-    hsm_password: String,
+    hsm_password: Option<String>,
 }
 
 #[derive(StructOpt)]
@@ -145,7 +146,7 @@ struct AddUserCommand {
     hsm_authkey: u16,
     #[structopt(short = "w", long = "password")]
     /// Password for the HSM AuthKey.
-    hsm_password: String,
+    hsm_password: Option<String>,
 }
 
 #[derive(StructOpt)]
@@ -209,13 +210,20 @@ pub fn main() -> Result<(), Error> {
 
     match opts.command {
         FeroServerCommand::Serve(serve_opts) => {
+            let hsm_password = match serve_opts.hsm_password {
+                Some(hsm_password) => SecStr::from(hsm_password),
+                None => SecStr::from(
+                    rpassword::prompt_password_stdout("Password for HSM AuthKey: ")?
+                ),
+            };
+
             let mut server = create_server(
                 &serve_opts.address,
                 serve_opts.port,
                 &opts.database,
                 &opts.hsm_connector_url,
                 serve_opts.hsm_authkey,
-                &serve_opts.hsm_password,
+                str::from_utf8(hsm_password.unsecure())?,
             )?;
 
             server.start();
@@ -229,10 +237,17 @@ pub fn main() -> Result<(), Error> {
             server.shutdown().wait()?;
         }
         FeroServerCommand::AddSecret(enroll_opts) => {
+            let hsm_password = match enroll_opts.hsm_password {
+                Some(hsm_password) => SecStr::from(hsm_password),
+                None => SecStr::from(
+                    rpassword::prompt_password_stdout("Password for HSM AuthKey: ")?
+                ),
+            };
+
             let hsm = hsm::Hsm::new(
                 &opts.hsm_connector_url,
                 enroll_opts.hsm_authkey,
-                &enroll_opts.hsm_password,
+                str::from_utf8(hsm_password.unsecure())?,
             )?;
 
             local::import_secret(
@@ -244,10 +259,17 @@ pub fn main() -> Result<(), Error> {
             )?;
         }
         FeroServerCommand::AddUser(user_opts) => {
+            let hsm_password = match user_opts.hsm_password {
+                Some(hsm_password) => SecStr::from(hsm_password),
+                None => SecStr::from(
+                    rpassword::prompt_password_stdout("Password for HSM AuthKey: ")?
+                ),
+            };
+
             let hsm = hsm::Hsm::new(
                 &opts.hsm_connector_url,
                 user_opts.hsm_authkey,
-                &user_opts.hsm_password,
+                str::from_utf8(hsm_password.unsecure())?,
             )?;
 
             let mut key_bytes = Vec::new();
