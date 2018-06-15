@@ -231,6 +231,10 @@ pub struct AuthenticatedConnection {
 }
 
 impl AuthenticatedConnection {
+    pub(crate) fn get_pgp_key_id(&self) -> Option<u64> {
+        self.secret_key
+    }
+
     pub fn get_hsm_key_id(&self) -> Result<u16, Error> {
         schema::secrets::dsl::secrets
             .filter(schema::secrets::columns::name.eq(&self.secret_name))

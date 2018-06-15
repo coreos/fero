@@ -26,8 +26,10 @@ use failure::Error;
 use gag::Gag;
 use libyubihsm::{Capability, ObjectType, ReturnCode, Yubihsm};
 use num::BigUint;
-use pretty_good::{Key, Packet};
+use pem;
+use pretty_good::{Key, KeyMaterial, Packet};
 use secstr::SecStr;
+use yasna;
 
 use database;
 use fero_proto::log::*;
@@ -110,9 +112,82 @@ pub(crate) fn import_pgp_secret(
 
     let db_conf = database::Configuration::new(database);
 
+    let (pubkey_material, privkey_material) = match subkey.key_material {
+        KeyMaterial::Rsa(ref pubkey_material, Some(ref privkey_material)) => {
+            (pubkey_material, privkey_material)
+        }
+        KeyMaterial::Rsa(_, None) => bail!(
+            "No private key material found. Either your PGP packet is malformed or there's a bug \
+             in `pretty-good`."
+        ),
+        KeyMaterial::Dsa(_, _) => bail!("DSA keys aren't supported."),
+        KeyMaterial::Elgamal(_, _) => bail!("Elgamal keys aren't supported."),
+    };
+
     let interior_result = hsm
-        .put_rsa_key(&subkey)
+        .put_rsa_key(&pubkey_material.n, &privkey_material.p, &privkey_material.q)
         .and_then(|hsm_id| store_key(&db_conf, hsm_id, Some(subkey.id()?), name, threshold));
+
+    match interior_result {
+        Ok(_) => logging::log_operation(
+            hsm,
+            &db_conf,
+            OperationType::AddSecret,
+            OperationResult::Success,
+            None,
+        ),
+        Err(_) => logging::log_operation(
+            hsm,
+            &db_conf,
+            OperationType::AddSecret,
+            OperationResult::Failure,
+            None,
+        ),
+    }.unwrap_or_else(|e| panic!("Failed to log operation: {}", e));
+
+    interior_result
+}
+
+pub(crate) fn import_pem_secret(
+    hsm: &Hsm,
+    filename: &Path,
+    database: &str,
+    name: &str,
+    threshold: i32,
+) -> Result<(), Error> {
+    let mut pem_bytes = Vec::new();
+    File::open(filename)?.read_to_end(&mut pem_bytes)?;
+    let pem = match pem::parse(&pem_bytes) {
+        Ok(pem) => pem,
+        Err(e) => bail!("Error parsing PEM: {}", e),
+    };
+
+    if pem.tag != "RSA PRIVATE KEY" {
+        bail!("Only PEMs containing RSA PRIVATE KEYs are supported");
+    }
+
+    let (n, p, q) = yasna::parse_der(&pem.contents, |reader| {
+        reader.read_sequence(|reader| {
+            // We don't care about most of these fields, but we have to read them all to keep
+            // `read_sequence` happy.
+            let _version = reader.next().read_u8()?;
+            let n = reader.next().read_biguint()?;
+            let _e = reader.next().read_biguint()?;
+            let _d = reader.next().read_biguint()?;
+            let p = reader.next().read_biguint()?;
+            let q = reader.next().read_biguint()?;
+            let _exp1 = reader.next().read_biguint()?;
+            let _exp2 = reader.next().read_biguint()?;
+            let _invq_modp = reader.next().read_biguint()?;
+            Ok((n, p, q))
+        })
+    })?;
+
+    let db_conf = database::Configuration::new(database);
+
+    let interior_result = hsm
+        .put_rsa_key(&n, &p, &q)
+        .and_then(|hsm_id| store_key(&db_conf, hsm_id, None, name, threshold));
 
     match interior_result {
         Ok(_) => logging::log_operation(

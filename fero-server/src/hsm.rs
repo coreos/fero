@@ -15,7 +15,7 @@
 use failure::Error;
 use libyubihsm::*;
 use num::BigUint;
-use pretty_good::*;
+use pretty_good::{HashAlgorithm, PublicKeyAlgorithm, Signature, SignaturePacket, SignatureType};
 use yasna;
 
 #[derive(Clone, Debug)]
@@ -49,7 +49,7 @@ impl Hsm {
         }))
     }
 
-    pub fn create_signature<T: AsRef<[u8]>>(
+    pub fn create_pgp_signature<T: AsRef<[u8]>>(
         &self,
         payload: T,
         signing_key: u16,
@@ -70,21 +70,25 @@ impl Hsm {
         Ok(sig_packet)
     }
 
-    pub fn put_rsa_key(&self, key: &Key) -> Result<u16, Error> {
-        let (pubkey_material, privkey_material) = match key.key_material {
-            KeyMaterial::Rsa(ref pubkey_material, Some(ref privkey_material)) => {
-                (pubkey_material, privkey_material)
-            }
-            KeyMaterial::Rsa(_, None) => bail!(
-                "No private key material found. Either your PGP \
-                 packet is malformed or there's a bug in \
-                 `pretty-good`."
-            ),
-            KeyMaterial::Dsa(_, _) => bail!("DSA keys aren't supported."),
-            KeyMaterial::Elgamal(_, _) => bail!("Elgamal keys aren't supported."),
+    pub fn create_rsa_signature<T: AsRef<[u8]>>(
+        &self,
+        payload: T,
+        signing_key: u16,
+    ) -> Result<Vec<u8>, Error> {
+        let payload = payload.as_ref();
+        let hash_algorithm = match payload.len() {
+            32 => HashAlgorithm::Sha256,
+            48 => HashAlgorithm::Sha384,
+            64 => HashAlgorithm::Sha512,
+            _ => bail!("Payload must be a SHA256, SHA384 or SHA512 hash"),
         };
+        let digestinfo = Hsm::create_digestinfo(payload.as_ref(), hash_algorithm)?;
 
-        let algorithm = match pubkey_material.n.bits() {
+        self.session.sign_pkcs1v1_5(signing_key, false, digestinfo)
+    }
+
+    pub fn put_rsa_key(&self, n: &BigUint, p: &BigUint, q: &BigUint) -> Result<u16, Error> {
+        let algorithm = match n.bits() {
             1024 => bail!("YubiHSM does not support 1024-bit RSA keys."),
             2048 => Algorithm::Rsa2048,
             4096 => Algorithm::Rsa4096,
@@ -109,8 +113,8 @@ impl Hsm {
             &this_authkey.domains,
             &[Capability::AsymmetricSignPkcs],
             algorithm,
-            &privkey_material.p.to_bytes_be(),
-            &privkey_material.q.to_bytes_be(),
+            &p.to_bytes_be(),
+            &q.to_bytes_be(),
         )?;
 
         Ok(object_id)

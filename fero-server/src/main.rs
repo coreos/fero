@@ -29,6 +29,7 @@ extern crate libyubihsm;
 extern crate log;
 extern crate loggerv;
 extern crate num;
+extern crate pem;
 extern crate pretty_good;
 extern crate protobuf;
 extern crate rpassword;
@@ -87,9 +88,12 @@ enum FeroServerCommand {
     #[structopt(name = "serve")]
     /// Start a fero server.
     Serve(ServeCommand),
-    #[structopt(name = "add-secret")]
-    /// Enroll a secret with fero.
-    AddSecret(AddSecretCommand),
+    #[structopt(name = "add-pgp-secret")]
+    /// Enroll an OpenPGP key as a secret with fero.
+    AddPgpSecret(AddPgpSecretCommand),
+    #[structopt(name = "add-pem-secret")]
+    /// Enroll a PEM private key as a secret with fero.
+    AddPemSecret(AddPemSecretCommand),
     #[structopt(name = "add-user")]
     /// Add a user to fero.
     AddUser(AddUserCommand),
@@ -118,13 +122,32 @@ struct ServeCommand {
 }
 
 #[derive(StructOpt)]
-struct AddSecretCommand {
+struct AddPgpSecretCommand {
     #[structopt(short = "f", long = "file", parse(from_os_str))]
     /// File containing the GPG private key to add.
     file: PathBuf,
     #[structopt(short = "s", long = "subkey", parse(try_from_str = "parse_biguint"))]
     /// Fingerprint of which subkey to add.
     subkey: BigUint,
+    #[structopt(short = "t", long = "threshold", default_value = "100")]
+    /// Threshold to associate with the new secret.
+    threshold: i32,
+    #[structopt(short = "n", long = "name")]
+    /// Name for the new secret.
+    name: String,
+    #[structopt(short = "k", long = "authkey")]
+    /// YubiHSM2 AuthKey to use.
+    hsm_authkey: u16,
+    #[structopt(short = "w", long = "password")]
+    /// Password for the HSM AuthKey.
+    hsm_password: Option<String>,
+}
+
+#[derive(StructOpt)]
+struct AddPemSecretCommand {
+    #[structopt(short = "f", long = "file", parse(from_os_str))]
+    /// File containing the PEM private key to add.
+    file: PathBuf,
     #[structopt(short = "t", long = "threshold", default_value = "100")]
     /// Threshold to associate with the new secret.
     threshold: i32,
@@ -239,7 +262,7 @@ pub fn main() -> Result<(), Error> {
             let _ = rx.wait();
             server.shutdown().wait()?;
         }
-        FeroServerCommand::AddSecret(enroll_opts) => {
+        FeroServerCommand::AddPgpSecret(enroll_opts) => {
             let hsm_password = match enroll_opts.hsm_password {
                 Some(hsm_password) => SecStr::from(hsm_password),
                 None => SecStr::from(
@@ -257,6 +280,28 @@ pub fn main() -> Result<(), Error> {
                 &hsm,
                 &enroll_opts.file,
                 &enroll_opts.subkey,
+                &opts.database,
+                &enroll_opts.name,
+                enroll_opts.threshold,
+            )?;
+        }
+        FeroServerCommand::AddPemSecret(enroll_opts) => {
+            let hsm_password = match enroll_opts.hsm_password {
+                Some(hsm_password) => SecStr::from(hsm_password),
+                None => SecStr::from(
+                    rpassword::prompt_password_stdout("Password for HSM AuthKey: ")?
+                ),
+            };
+
+            let hsm = hsm::Hsm::new(
+                &opts.hsm_connector_url,
+                enroll_opts.hsm_authkey,
+                str::from_utf8(hsm_password.unsecure())?,
+            )?;
+
+            local::import_pem_secret(
+                &hsm,
+                &enroll_opts.file,
                 &opts.database,
                 &enroll_opts.name,
                 enroll_opts.threshold,

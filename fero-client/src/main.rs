@@ -35,7 +35,8 @@ use grpcio::{ChannelBuilder, EnvBuilder};
 use protobuf::repeated::RepeatedField;
 use structopt::StructOpt;
 
-use fero_proto::fero::{Identification, LogRequest, SignRequest, ThresholdRequest, WeightRequest};
+use fero_proto::fero::{Identification, LogRequest, SignRequest, SignRequest_SignatureType,
+                       ThresholdRequest, WeightRequest};
 use fero_proto::fero_grpc::FeroClient;
 use fero_proto::log::FeroLogEntry;
 
@@ -69,6 +70,9 @@ struct SignCommand {
     #[structopt(short = "o", long = "output", parse(from_os_str))]
     /// The file to place the signature in.
     output: PathBuf,
+    #[structopt(long = "pkcs1")]
+    /// Produce a PKCS1V1.5 signature, if set.
+    rsa: bool,
 }
 
 #[derive(StructOpt)]
@@ -196,6 +200,11 @@ pub fn main() -> Result<(), Error> {
 
             let mut req = SignRequest::new();
             req.set_identification(ident);
+            if sign_opts.rsa {
+                req.set_sigType(SignRequest_SignatureType::PKCS1V1_5);
+            } else {
+                req.set_sigType(SignRequest_SignatureType::PGP);
+            }
             req.set_payload({
                 let mut file = File::open(sign_opts.file)?;
                 let mut contents = Vec::new();
