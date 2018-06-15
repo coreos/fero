@@ -1,3 +1,4 @@
+// vim: set noexpandtab:
 syntax = "proto3";
 
 import "google/protobuf/timestamp.proto";
@@ -12,6 +13,7 @@ service Fero {
 message Identification {
 	uint64 secretKeyId = 1;
 	repeated bytes signatures = 2;
+	string secretKeyName = 3;
 }
 
 message HsmLog {

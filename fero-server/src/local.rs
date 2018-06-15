@@ -38,7 +38,8 @@ const DEFAULT_HSM_AUTHKEY_ID: u16 = 1;
 const DEFAULT_HSM_PASSWORD: &'static str = "password";
 
 pub(crate) struct LocalIdentification {
-    pub(crate) secret_key: u64,
+    pub(crate) secret_key: Option<u64>,
+    pub(crate) name: String,
     _priv: (),
 }
 
@@ -88,17 +89,19 @@ pub(crate) fn find_keyid(packets_bytes: &[u8]) -> Result<u64, Error> {
 pub(crate) fn store_key(
     database: &database::Configuration,
     hsm_id: u16,
-    key_id: u64,
+    key_id: Option<u64>,
+    name: &str,
     threshold: i32,
 ) -> Result<(), Error> {
-    database.insert_secret_key(i32::from(hsm_id), key_id as i64, threshold)
+    database.insert_secret_key(i32::from(hsm_id), key_id.map(|id| id as i64), name, threshold)
 }
 
-pub(crate) fn import_secret(
+pub(crate) fn import_pgp_secret(
     hsm: &Hsm,
     filename: &Path,
     subkey: &BigUint,
     database: &str,
+    name: &str,
     threshold: i32,
 ) -> Result<(), Error> {
     let mut key_bytes = Vec::new();
@@ -109,7 +112,7 @@ pub(crate) fn import_secret(
 
     let interior_result = hsm
         .put_rsa_key(&subkey)
-        .and_then(|hsm_id| store_key(&db_conf, hsm_id, subkey.id()?, threshold));
+        .and_then(|hsm_id| store_key(&db_conf, hsm_id, Some(subkey.id()?), name, threshold));
 
     match interior_result {
         Ok(_) => logging::log_operation(
@@ -158,12 +161,13 @@ pub(crate) fn store_user(hsm: &Hsm, database_url: &str, key_id: u64, key: &[u8])
 pub(crate) fn set_user_weight(
     database_url: &str,
     user_key: u64,
-    secret_key: u64,
+    secret_key_name: &str,
     weight: i32,
 ) -> Result<(), Error> {
     let database = database::Configuration::new(database_url);
     let authed_database = database.local_authenticate(LocalIdentification {
-        secret_key,
+        secret_key: None,
+        name: String::from(secret_key_name),
         _priv: (),
     })?;
 
@@ -171,7 +175,7 @@ pub(crate) fn set_user_weight(
         .get_user_key(user_key)?
         .ok_or(format_err!("No such user"))?;
 
-    authed_database.upsert_user_key_weight(secret_key, user_key_obj, weight)
+    authed_database.upsert_user_key_weight(user_key_obj, weight)
 }
 
 pub(crate) fn provision(

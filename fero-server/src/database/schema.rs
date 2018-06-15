@@ -15,9 +15,10 @@
 table! {
     secrets (id) {
         id -> Integer,
-        key_id -> BigInt,
+        key_id -> Nullable<BigInt>,
         threshold -> Integer,
         hsm_id -> Integer,
+        name -> Text,
     }
 }
 

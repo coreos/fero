@@ -28,6 +28,7 @@ const APP_PASSWORD: &str = "application";
 /// an operation with a `threshold` of `n`.
 struct TestEnvironment {
     directory: TempDir,
+    secret_name: String,
     secret_id: u64,
     valid_users: Vec<u64>,
     invalid_users: Vec<u64>,
@@ -102,16 +103,18 @@ fn setup_environment(
     let mut gpg = Context::from_protocol(Protocol::OpenPgp)?;
     gpg.set_engine_home_dir(directory.path().as_os_str().as_bytes())?;
 
+    let secret_name = String::from("fero-test");
     let secret_gpg_key = create_gpg_key(&mut gpg, &directory, "Fero Test Secret")?;
     let mut secret_gpg_key_data = Vec::new();
     File::open(secret_gpg_key.path())?.read_to_end(&mut secret_gpg_key_data)?;
     let secret_id = match Packet::from_bytes(&secret_gpg_key_data)? {
         (Packet::SecretKey(key), _) => {
-            local::import_secret(
+            local::import_pgp_secret(
                 &hsm,
                 secret_gpg_key.path(),
                 &BigUint::from_bytes_be(&key.fingerprint()?),
                 database_path,
+                &secret_name,
                 threshold,
             )?;
 
@@ -128,7 +131,7 @@ fn setup_environment(
             let key_id = local::find_keyid(&key_bytes)?;
 
             local::store_user(&hsm, database_path, key_id, &key_bytes)?;
-            local::set_user_weight(database_path, key_id, secret_id, 1)?;
+            local::set_user_weight(database_path, key_id, &secret_name, 1)?;
 
             Ok(key_id)
         })
@@ -149,6 +152,7 @@ fn setup_environment(
 
     Ok(TestEnvironment {
         directory,
+        secret_name,
         secret_id,
         valid_users,
         invalid_users,
@@ -189,7 +193,7 @@ fn sign() {
     gpg.sign_detached(artifact, &mut signature).unwrap();
 
     let mut ident = Identification::new();
-    ident.set_secretKeyId(env.secret_id);
+    ident.set_secretKeyName(&env.secret_name);
     ident.set_signatures(RepeatedField::from_vec(vec![signature]));
 
     let output = env.fero_service.sign_payload(&ident, artifact).unwrap();
@@ -223,7 +227,7 @@ fn dont_sign_invalid_user() {
     gpg.sign_detached(artifact, &mut signature).unwrap();
 
     let mut ident = Identification::new();
-    ident.set_secretKeyId(env.secret_id);
+    ident.set_secretKeyName(&env.secret_name);
     ident.set_signatures(RepeatedField::from_vec(vec![signature]));
 
     assert!(env.fero_service.sign_payload(&ident, artifact).is_err());
@@ -238,7 +242,7 @@ fn dont_sign_no_signatures() {
     let artifact = "Test payload. This should NOT be signed successfully.".as_bytes();
 
     let mut ident = Identification::new();
-    ident.set_secretKeyId(env.secret_id);
+    ident.set_secretKeyName(&env.secret_name);
 
     assert!(env.fero_service.sign_payload(&ident, artifact).is_err());
 
@@ -262,7 +266,7 @@ fn dont_sign_wrong_payload() {
     gpg.sign_detached(wrong_artifact, &mut signature).unwrap();
 
     let mut ident = Identification::new();
-    ident.set_secretKeyId(env.secret_id);
+    ident.set_secretKeyName(&env.secret_name);
     ident.set_signatures(RepeatedField::from_vec(vec![signature]));
 
     assert!(env.fero_service.sign_payload(&ident, artifact).is_err());

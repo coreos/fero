@@ -127,6 +127,9 @@ struct AddSecretCommand {
     #[structopt(short = "t", long = "threshold", default_value = "100")]
     /// Threshold to associate with the new secret.
     threshold: i32,
+    #[structopt(short = "n", long = "name")]
+    /// Name for the new secret.
+    name: String,
     #[structopt(short = "k", long = "authkey")]
     /// YubiHSM2 AuthKey to use.
     hsm_authkey: u16,
@@ -153,9 +156,9 @@ struct SetUserWeightCommand {
     #[structopt(short = "u", long = "user", parse(try_from_str = "parse_hex"))]
     /// PGP key ID for the user.
     user: u64,
-    #[structopt(short = "s", long = "secret", parse(try_from_str = "parse_hex"))]
-    /// PGP key ID for the secret.
-    secret: u64,
+    #[structopt(short = "n", long = "name")]
+    /// Name of the secret.
+    secret: String,
     #[structopt(short = "e", long = "weight")]
     /// New weight.
     weight: i32,
@@ -235,11 +238,12 @@ pub fn main() -> Result<(), Error> {
                 &enroll_opts.hsm_password,
             )?;
 
-            local::import_secret(
+            local::import_pgp_secret(
                 &hsm,
                 &enroll_opts.file,
                 &enroll_opts.subkey,
                 &opts.database,
+                &enroll_opts.name,
                 enroll_opts.threshold,
             )?;
         }
@@ -260,7 +264,7 @@ pub fn main() -> Result<(), Error> {
             local::set_user_weight(
                 &opts.database,
                 weight_opts.user,
-                weight_opts.secret,
+                &weight_opts.secret,
                 weight_opts.weight,
             )?;
         }
