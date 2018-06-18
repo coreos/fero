@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+extern crate chrono;
 extern crate failure;
 extern crate fero_proto;
 extern crate futures;
@@ -19,6 +20,7 @@ extern crate grpcio;
 #[macro_use]
 extern crate log;
 extern crate loggerv;
+extern crate protobuf;
 #[macro_use]
 extern crate structopt;
 

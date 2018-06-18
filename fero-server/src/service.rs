@@ -15,6 +15,7 @@
 use std::io::Write;
 
 use byteorder::{BigEndian, WriteBytesExt};
+use chrono::prelude::*;
 use failure::Error;
 use futures::Future;
 use grpcio::{self, RpcContext, RpcStatus, UnarySink};
@@ -36,6 +37,11 @@ pub struct FeroService {
 
 impl Fero for FeroService {
     fn sign_payload(&self, ctx: RpcContext, mut req: SignRequest, sink: UnarySink<SignResponse>) {
+        let timestamp = NaiveDateTime::from_timestamp(
+            req.get_timestamp().get_seconds(),
+            req.get_timestamp().get_nanos() as u32,
+        );
+
         let operation_result = self.sign_payload(
             req.get_identification(),
             req.get_payload(),
@@ -53,6 +59,7 @@ impl Fero for FeroService {
             OperationType::Sign,
             logged_result,
             Some(req.take_identification()),
+            timestamp,
         ).unwrap_or_else(|e| panic!("Failed to log an operation: {}", e));
 
         match operation_result {
@@ -79,6 +86,11 @@ impl Fero for FeroService {
         mut req: ThresholdRequest,
         sink: UnarySink<ThresholdResponse>,
     ) {
+        let timestamp = NaiveDateTime::from_timestamp(
+            req.get_timestamp().get_seconds(),
+            req.get_timestamp().get_nanos() as u32,
+        );
+
         let operation_result = self.set_secret_key_threshold(
             req.get_identification(),
             req.get_threshold(),
@@ -95,6 +107,7 @@ impl Fero for FeroService {
             OperationType::Threshold,
             logged_result,
             Some(req.take_identification()),
+            timestamp,
         ).unwrap_or_else(|e| panic!("Failed to log an operation: {}", e));
 
         match operation_result {
@@ -114,6 +127,11 @@ impl Fero for FeroService {
         mut req: WeightRequest,
         sink: UnarySink<WeightResponse>,
     ) {
+        let timestamp = NaiveDateTime::from_timestamp(
+            req.get_timestamp().get_seconds(),
+            req.get_timestamp().get_nanos() as u32,
+        );
+
         let operation_result = self.set_user_key_weight(
             req.get_identification(),
             req.get_userKeyId(),
@@ -131,6 +149,7 @@ impl Fero for FeroService {
             OperationType::Weight,
             logged_result,
             Some(req.take_identification()),
+            timestamp,
         ).unwrap_or_else(|e| panic!("Failed to log an operation: {}", e));
 
         match operation_result {
