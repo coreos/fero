@@ -1,7 +1,7 @@
 [package]
 name = "fero-client"
 version = "0.1.0"
-authors = ["Alex Crawford <alex.crawford@coreos.com>"]
+authors = ["Alex Crawford <alex.crawford@coreos.com>", "James Forcier <csssuf@csssuf.net>"]
 workspace = ".."
 
 [dependencies]
