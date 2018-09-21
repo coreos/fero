@@ -1,4 +1,4 @@
-FROM rust:stretch as build
+FROM rust:1.27-stretch as build
 
 ADD https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip \
     /tmp/protoc.zip
