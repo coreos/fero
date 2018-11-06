@@ -1,0 +1,26 @@
+sudo: required
+dist: trusty
+
+language: rust
+rust:
+  - 1.27.0  # minimum supported toolchain
+  - stable
+  - beta
+  - nightly
+
+matrix:
+  allow_failures:
+    - rust: nightly
+
+before_install:
+  - sudo apt-get --yes install libgpgme11-dev unzip
+  - wget -O /tmp/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v3.6.1/protoc-3.6.1-linux-x86_64.zip
+  - sudo unzip -d /usr /tmp/protoc.zip
+  - sudo chmod -R a+rx /usr/include/google/
+  - wget https://developers.yubico.com/YubiHSM2/Releases/yubihsm2-sdk-1.0.1-ubuntu1404-amd64.tar.gz
+  - tar -xf yubihsm2-sdk-1.0.1-ubuntu1404-amd64.tar.gz
+  - sudo dpkg -i yubihsm2-sdk/libyubihsm1_1.0.1-1_amd64.deb
+  - sudo dpkg -i yubihsm2-sdk/libyubihsm-dev_1.0.1-1_amd64.deb
+
+script:
+  - cargo build
