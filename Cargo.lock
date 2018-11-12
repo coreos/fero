@@ -298,11 +298,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "fero-bastion"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "fero-proto 0.1.0",
+ "fero-proto 0.1.1",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "grpcio 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -313,11 +313,11 @@ dependencies = [
 
 [[package]]
 name = "fero-client"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "byteorder 1.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "fero-proto 0.1.0",
+ "fero-proto 0.1.1",
  "grpcio 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "loggerv 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -327,7 +327,7 @@ dependencies = [
 
 [[package]]
 name = "fero-proto"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "byteorder 1.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -345,14 +345,14 @@ dependencies = [
 
 [[package]]
 name = "fero-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "byteorder 1.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "diesel 1.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "diesel_migrations 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "fero-proto 0.1.0",
+ "fero-proto 0.1.1",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "gag 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "gpgme 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
